@@ -1,0 +1,17 @@
+*.iml
+.gradle
+/local.properties
+/.idea
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# Kotlin 2.x compiler session data
+.kotlin/
+
+# Signing keys — never commit these
+*.jks
+*.keystore
