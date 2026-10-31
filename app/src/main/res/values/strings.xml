@@ -1,3 +1,24 @@
 <resources>
     <string name="app_name">Breader</string>
+
+    <string name="tab_library">Library</string>
+    <string name="tab_reader">Reading</string>
+
+    <string name="library_title">Library</string>
+    <string name="library_empty">Your library is empty.\nAdd EPUB, FB2 or TXT books with the + button.</string>
+    <string name="add_books">Add books</string>
+    <string name="book_options">More options</string>
+    <string name="remove_from_library">Remove from library</string>
+    <string name="book_removed">“%1$s” removed</string>
+    <string name="undo">Undo</string>
+    <string name="import_failed">Couldn\'t add: %1$s</string>
+    <string name="import_duplicates">Already in the library: %1$s</string>
+
+    <string name="reader_no_book">No book is open</string>
+    <string name="reader_no_book_hint">Pick a book in the library.</string>
+    <string name="reader_failed">Couldn\'t open “%1$s”</string>
+    <string name="reader_failed_hint">The file may have been moved or deleted.</string>
+    <string name="open_library">Open library</string>
+
+    <string name="progress_percent">%1$d%%</string>
 </resources>
