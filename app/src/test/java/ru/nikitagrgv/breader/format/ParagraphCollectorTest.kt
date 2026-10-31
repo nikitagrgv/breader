@@ -23,6 +23,21 @@ class ParagraphCollectorTest {
     }
 
     @Test
+    fun `indentation made of non-breaking spaces is dropped`() {
+        val collector = ParagraphCollector()
+        collector.append("   Some ")
+        collector.startStyle(InlineStyle.ITALIC)
+        collector.append("italic")
+        collector.endStyle(InlineStyle.ITALIC)
+        collector.append(" ")
+        collector.endParagraph(ParagraphKind.BODY)
+        val paragraph = collector.paragraphs.single()
+        assertEquals("Some italic", paragraph.text)
+        val span = paragraph.spans.single()
+        assertEquals("italic", paragraph.text.substring(span.start, span.end).trim())
+    }
+
+    @Test
     fun `inline styles become ranges`() {
         val collector = ParagraphCollector()
         collector.append("Some ")

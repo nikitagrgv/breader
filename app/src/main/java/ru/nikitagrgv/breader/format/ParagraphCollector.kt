@@ -39,13 +39,18 @@ internal class ParagraphCollector {
     }
 
     fun endParagraph(kind: ParagraphKind) {
-        // A trailing <br/> shouldn't produce an empty line.
-        while (text.isNotEmpty() && text.last() == '\n') text.setLength(text.length - 1)
-        if (text.isNotEmpty()) {
-            val end = text.length
-            for (open in openStyles) addRange(open.style, open.start, end)
-            val spans = ranges.mapNotNull { if (it.start >= end) null else it.copy(end = minOf(it.end, end)) }
-            paragraphs += Paragraph(text.toString(), kind, spans)
+        // Books often indent paragraphs with non-breaking spaces and end them with <br/>;
+        // both are dropped, since the reader lays out paragraphs itself.
+        val start = text.indexOfFirst { !it.isWhitespace() }
+        if (start >= 0) {
+            val end = text.indexOfLast { !it.isWhitespace() } + 1
+            for (open in openStyles) addRange(open.style, open.start, text.length)
+            val spans = ranges.mapNotNull {
+                val spanStart = maxOf(it.start, start) - start
+                val spanEnd = minOf(it.end, end) - start
+                if (spanEnd > spanStart) it.copy(start = spanStart, end = spanEnd) else null
+            }
+            paragraphs += Paragraph(text.substring(start, end), kind, spans)
         }
         // Styles that are still open continue into the next paragraph.
         for (i in openStyles.indices) openStyles[i] = openStyles[i].copy(start = 0)
