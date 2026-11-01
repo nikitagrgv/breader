@@ -1,4 +1,5 @@
 <resources>
-    <!-- The UI is drawn by Compose (see ui/theme/Theme.kt); this only covers the window itself. -->
-    <style name="Theme.Breader" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- The UI is drawn by Compose (see ui/theme/Theme.kt); this only covers the window itself.
+         Dark, because the app theme is dark by default regardless of the system one. -->
+    <style name="Theme.Breader" parent="android:Theme.Material.NoActionBar" />
 </resources>

@@ -12,18 +12,22 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ru.nikitagrgv.breader.BreaderApplication
+import ru.nikitagrgv.breader.data.AppSettings
+import ru.nikitagrgv.breader.data.AppTheme
 import ru.nikitagrgv.breader.data.Book
 import ru.nikitagrgv.breader.data.BookFiles
 import ru.nikitagrgv.breader.data.Library
 import ru.nikitagrgv.breader.data.LibraryRepository
 import ru.nikitagrgv.breader.data.ReadingPosition
-import ru.nikitagrgv.breader.ui.reader.ReaderSettings
+import ru.nikitagrgv.breader.data.SettingsRepository
 import ru.nikitagrgv.breader.ui.reader.ReaderState
 import ru.nikitagrgv.breader.ui.reader.bookId
 
@@ -34,16 +38,18 @@ sealed interface LibraryEvent {
 
 class MainViewModel(
     private val repository: LibraryRepository,
+    private val settingsRepository: SettingsRepository,
     private val files: BookFiles,
 ) : ViewModel() {
 
     val library: StateFlow<Library?> = repository.library
 
+    /** `null` until loaded; the UI waits for it to avoid flashing the wrong theme. */
+    val settings: StateFlow<AppSettings?> =
+        settingsRepository.settings.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
     private val _reader = MutableStateFlow<ReaderState>(ReaderState.Empty)
     val reader: StateFlow<ReaderState> = _reader.asStateFlow()
-
-    // Constant for now; will come from user preferences.
-    val readerSettings: StateFlow<ReaderSettings> = MutableStateFlow(ReaderSettings()).asStateFlow()
 
     private val _events = Channel<LibraryEvent>(Channel.BUFFERED)
     val events: Flow<LibraryEvent> = _events.receiveAsFlow()
@@ -106,6 +112,18 @@ class MainViewModel(
     fun savePosition(bookId: String, position: ReadingPosition, progress: Float) =
         repository.updatePosition(bookId, position, progress)
 
+    fun setTheme(theme: AppTheme) {
+        viewModelScope.launch { settingsRepository.setTheme(theme) }
+    }
+
+    fun setFontSize(size: Float) {
+        viewModelScope.launch { settingsRepository.setFontSize(size) }
+    }
+
+    fun setHyphenation(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setHyphenation(enabled) }
+    }
+
     private fun load(book: Book) {
         loadJob?.cancel()
         _reader.value = ReaderState.Loading(book.id, book.title)
@@ -134,7 +152,7 @@ class MainViewModel(
         val Factory = viewModelFactory {
             initializer {
                 val app = this[APPLICATION_KEY] as BreaderApplication
-                MainViewModel(app.libraryRepository, app.bookFiles)
+                MainViewModel(app.libraryRepository, app.settingsRepository, app.bookFiles)
             }
         }
     }

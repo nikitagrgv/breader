@@ -1,11 +1,18 @@
 package ru.nikitagrgv.breader.ui.reader
 
+import android.content.ClipData
+import android.content.Intent
+import android.os.Build
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +24,7 @@ import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.add
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -27,23 +35,37 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.contextmenu.provider.LocalTextContextMenuToolbarProvider
+import androidx.compose.foundation.text.contextmenu.provider.TextContextMenuDataProvider
+import androidx.compose.foundation.text.contextmenu.provider.TextContextMenuProvider
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.text.selection.SelectionState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -59,6 +81,10 @@ import androidx.compose.ui.text.style.TextIndent
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.launch
 import ru.nikitagrgv.breader.R
 import ru.nikitagrgv.breader.data.ReadingPosition
 import ru.nikitagrgv.breader.format.InlineStyle
@@ -104,6 +130,7 @@ fun ReaderScreen(
                         state = state,
                         settings = settings,
                         chromeVisible = chromeVisible,
+                        contentPadding = contentPadding,
                         onToggleChrome = onToggleChrome,
                         onHideChrome = onHideChrome,
                         onPositionChange = { position, progress -> onPositionChange(state.bookId, position, progress) },
@@ -114,11 +141,19 @@ fun ReaderScreen(
     }
 }
 
+/** A sample paragraph that looks exactly like the book text, e.g. for previewing settings. */
+@Composable
+fun ReaderTextPreview(text: String, settings: ReaderSettings, modifier: Modifier = Modifier) {
+    val looks = rememberParagraphLooks(settings)
+    ParagraphText(Paragraph(text), looks.getValue(ParagraphKind.BODY), modifier)
+}
+
 @Composable
 private fun BookText(
     state: ReaderState.Ready,
     settings: ReaderSettings,
     chromeVisible: Boolean,
+    contentPadding: PaddingValues,
     onToggleChrome: () -> Unit,
     onHideChrome: () -> Unit,
     onPositionChange: (ReadingPosition, Float) -> Unit,
@@ -128,6 +163,17 @@ private fun BookText(
     // Saveable, so the position survives switching tabs and configuration changes.
     val listState = rememberLazyListState(state.initialPosition.paragraph, state.initialPosition.offset)
     val progress by remember(listState) { derivedStateOf { listState.readingProgress() } }
+    // Not saveable on purpose: a restored selection would refer to texts that are composed anew.
+    val selectionState = remember { SelectionState() }
+    val hasSelection by remember(selectionState) {
+        derivedStateOf { selectionState.selectedTexts.any { it.isNotEmpty() } }
+    }
+    // The position (0..1) the seek bar is dragged to; null while it isn't touched.
+    var seekFraction by remember { mutableStateOf<Float?>(null) }
+    var topBarHeight by remember { mutableIntStateOf(0) }
+    val context = LocalContext.current
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
 
     val currentOnToggleChrome by rememberUpdatedState(onToggleChrome)
     val currentOnHideChrome by rememberUpdatedState(onHideChrome)
@@ -138,10 +184,22 @@ private fun BookText(
         currentOnPositionChange(position, currentProgress)
     }
 
+    // The bars only get in the way while reading, so they're hidden once the user drags the text
+    // (jumps made with the seek bar don't count).
     LaunchedEffect(listState) {
-        snapshotFlow { listState.isScrollInProgress }.collect { scrolling ->
-            // The bars only get in the way while reading; the position is stored once the scroll settles.
-            if (scrolling) currentOnHideChrome() else savePosition()
+        listState.interactionSource.interactions.collect {
+            if (it is DragInteraction.Start) currentOnHideChrome()
+        }
+    }
+    // The position is stored once scrolling or seeking settles.
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isScrollInProgress || seekFraction != null }.collect { busy ->
+            if (!busy) savePosition()
+        }
+    }
+    LaunchedEffect(listState, paragraphs.size) {
+        snapshotFlow { seekFraction }.filterNotNull().collectLatest { fraction ->
+            listState.scrollToItem((fraction * (paragraphs.size - 1)).roundToInt())
         }
     }
     DisposableEffect(listState) {
@@ -149,19 +207,30 @@ private fun BookText(
     }
 
     Box(Modifier.fillMaxSize()) {
-        LazyColumn(
-            state = listState,
-            // Only the camera cutout is avoided: the system bars are hidden while reading.
-            contentPadding = WindowInsets.displayCutout
-                .add(WindowInsets(settings.pagePadding, settings.pagePadding, settings.pagePadding, settings.pagePadding))
-                .asPaddingValues(),
-            modifier = Modifier
-                .fillMaxSize()
-                .pointerInput(Unit) { detectTapGestures(onTap = { currentOnToggleChrome() }) },
-        ) {
-            items(count = paragraphs.size, contentType = { paragraphs[it].kind }) { index ->
-                val paragraph = paragraphs[index]
-                ParagraphText(paragraph, looks.getValue(paragraph.kind))
+        CompositionLocalProvider(LocalTextContextMenuToolbarProvider provides NoTextContextMenu) {
+            SelectionContainer(state = selectionState, modifier = Modifier.fillMaxSize()) {
+                LazyColumn(
+                    state = listState,
+                    // Only the camera cutout is avoided: the system bars are hidden while reading.
+                    contentPadding = WindowInsets.displayCutout
+                        .add(WindowInsets(settings.pagePadding, settings.pagePadding, settings.pagePadding, settings.pagePadding))
+                        .asPaddingValues(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(Unit) {
+                            var hadSelection = false
+                            detectTapGestures(
+                                // A tap that clears the selection shouldn't toggle the bars as well.
+                                onPress = { hadSelection = hasSelection },
+                                onTap = { if (!hadSelection) currentOnToggleChrome() },
+                            )
+                        },
+                ) {
+                    items(count = paragraphs.size, contentType = { paragraphs[it].kind }) { index ->
+                        val paragraph = paragraphs[index]
+                        ParagraphText(paragraph, looks.getValue(paragraph.kind))
+                    }
+                }
             }
         }
 
@@ -171,8 +240,72 @@ private fun BookText(
             exit = fadeOut() + slideOutVertically { -it },
             modifier = Modifier.align(Alignment.TopCenter),
         ) {
-            ReaderTopBar(title = state.title, progress = progress)
+            ReaderTopBar(
+                title = state.title,
+                progress = progress,
+                modifier = Modifier.onSizeChanged { topBarHeight = it.height },
+            )
         }
+
+        // Between the top bar and the navigation bar, over the left edge of the text.
+        AnimatedVisibility(
+            visible = chromeVisible,
+            enter = fadeIn() + slideInHorizontally { -it },
+            exit = fadeOut() + slideOutHorizontally { -it },
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Start))
+                .padding(
+                    start = 8.dp,
+                    top = with(LocalDensity.current) { topBarHeight.toDp() } + 12.dp,
+                    bottom = contentPadding.calculateBottomPadding() + 12.dp,
+                )
+                .fillMaxHeight(),
+        ) {
+            BookSeekBar(
+                fraction = seekFraction ?: progress ?: 0f,
+                onSeek = { seekFraction = it },
+                onSeekFinished = { seekFraction = null },
+                modifier = Modifier.fillMaxHeight(),
+            )
+        }
+
+        AnimatedVisibility(
+            visible = hasSelection,
+            enter = fadeIn() + slideInVertically { -it },
+            exit = fadeOut() + slideOutVertically { -it },
+            modifier = Modifier.align(Alignment.TopCenter),
+        ) {
+            SelectionBar(
+                onCopy = {
+                    val text = selectionState.selectedText()
+                    scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText(null, text))) }
+                    // Android 13+ confirms copying by itself.
+                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+                        Toast.makeText(context, R.string.copied, Toast.LENGTH_SHORT).show()
+                    }
+                    selectionState.clear()
+                },
+                onShare = {
+                    val send = Intent(Intent.ACTION_SEND)
+                        .setType("text/plain")
+                        .putExtra(Intent.EXTRA_TEXT, selectionState.selectedText())
+                    context.startActivity(Intent.createChooser(send, null))
+                    selectionState.clear()
+                },
+                onClear = selectionState::clear,
+            )
+        }
+    }
+}
+
+/** Selected parts of the paragraphs, one per line. */
+private fun SelectionState.selectedText(): String = selectedTexts.joinToString("\n") { it.text }
+
+/** Suppresses the floating text toolbar: the reader shows [SelectionBar] instead. */
+private object NoTextContextMenu : TextContextMenuProvider {
+    override suspend fun showTextContextMenu(dataProvider: TextContextMenuDataProvider) {
+        awaitCancellation()
     }
 }
 
@@ -186,12 +319,12 @@ private fun LazyListState.readingProgress(): Float? {
 }
 
 @Composable
-private fun ParagraphText(paragraph: Paragraph, look: ParagraphLook) {
+private fun ParagraphText(paragraph: Paragraph, look: ParagraphLook, modifier: Modifier = Modifier) {
     val text = remember(paragraph) { paragraph.toAnnotatedString() }
     Text(
         text = text,
         style = look.style,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(look.padding),
     )
@@ -226,7 +359,7 @@ private fun rememberParagraphLooks(settings: ReaderSettings): Map<ParagraphKind,
             lineHeight = settings.lineHeight.em,
             textAlign = TextAlign.Justify,
             textIndent = TextIndent(firstLine = 1.5.em),
-            hyphens = Hyphens.Auto,
+            hyphens = if (settings.hyphenation) Hyphens.Auto else Hyphens.None,
             lineBreak = LineBreak.Paragraph,
         )
         val centered = body.copy(textAlign = TextAlign.Center, textIndent = TextIndent.None, hyphens = Hyphens.None)
@@ -253,8 +386,8 @@ private fun rememberParagraphLooks(settings: ReaderSettings): Map<ParagraphKind,
 }
 
 @Composable
-private fun ReaderTopBar(title: String, progress: Float?) {
-    Surface(color = MaterialTheme.colorScheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
+private fun ReaderTopBar(title: String, progress: Float?, modifier: Modifier = Modifier) {
+    Surface(color = MaterialTheme.colorScheme.surfaceContainer, modifier = modifier.fillMaxWidth()) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier

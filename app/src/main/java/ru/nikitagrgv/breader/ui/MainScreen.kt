@@ -37,31 +37,35 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import ru.nikitagrgv.breader.R
+import ru.nikitagrgv.breader.data.AppSettings
 import ru.nikitagrgv.breader.ui.library.AddBooksButton
 import ru.nikitagrgv.breader.ui.library.LibraryScreen
 import ru.nikitagrgv.breader.ui.reader.ReaderScreen
 import ru.nikitagrgv.breader.ui.reader.ReaderState
+import ru.nikitagrgv.breader.ui.reader.toReaderSettings
+import ru.nikitagrgv.breader.ui.settings.SettingsScreen
 
 enum class MainTab(@param:StringRes val label: Int, @param:DrawableRes val icon: Int) {
     LIBRARY(R.string.tab_library, R.drawable.ic_library_books),
     READER(R.string.tab_reader, R.drawable.ic_book),
+    SETTINGS(R.string.tab_settings, R.drawable.ic_settings),
 }
 
 @Composable
-fun MainScreen(viewModel: MainViewModel) {
+fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
     val readerState by viewModel.reader.collectAsStateWithLifecycle()
-    val readerSettings by viewModel.readerSettings.collectAsStateWithLifecycle()
+    val readerSettings = remember(settings) { settings.toReaderSettings() }
     var tab by rememberSaveable { mutableStateOf(MainTab.LIBRARY) }
     var readerChromeVisible by rememberSaveable { mutableStateOf(true) }
     val snackbarHostState = remember { SnackbarHostState() }
-    // Keeps the saveable state (e.g. scroll positions) of a tab while the other one is shown.
+    // Keeps the saveable state (e.g. scroll positions) of a tab while another one is shown.
     val tabStates = rememberSaveableStateHolder()
 
     // While reading, the text takes the whole screen; a tap brings the bars back.
     val immersive = tab == MainTab.READER && readerState is ReaderState.Ready && !readerChromeVisible
     SystemBarsVisibility(visible = !immersive)
 
-    BackHandler(enabled = tab == MainTab.READER) { tab = MainTab.LIBRARY }
+    BackHandler(enabled = tab != MainTab.LIBRARY) { tab = MainTab.LIBRARY }
 
     LibraryEventsEffect(viewModel, snackbarHostState)
 
@@ -117,6 +121,13 @@ fun MainScreen(viewModel: MainViewModel) {
                     onHideChrome = { readerChromeVisible = false },
                     onPositionChange = viewModel::savePosition,
                     onOpenLibrary = { tab = MainTab.LIBRARY },
+                )
+                MainTab.SETTINGS -> SettingsScreen(
+                    settings = settings,
+                    contentPadding = innerPadding,
+                    onThemeChange = viewModel::setTheme,
+                    onFontSizeChange = viewModel::setFontSize,
+                    onHyphenationChange = viewModel::setHyphenation,
                 )
             }
         }
