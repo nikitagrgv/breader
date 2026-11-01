@@ -35,6 +35,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 import ru.nikitagrgv.breader.R
 import ru.nikitagrgv.breader.data.AppSettings
@@ -44,6 +45,8 @@ import ru.nikitagrgv.breader.ui.reader.ReaderScreen
 import ru.nikitagrgv.breader.ui.reader.ReaderState
 import ru.nikitagrgv.breader.ui.reader.toReaderSettings
 import ru.nikitagrgv.breader.ui.settings.SettingsScreen
+import ru.nikitagrgv.breader.ui.translation.TranslationSheet
+import ru.nikitagrgv.breader.ui.translation.TranslationViewModel
 
 enum class MainTab(@param:StringRes val label: Int, @param:DrawableRes val icon: Int) {
     LIBRARY(R.string.tab_library, R.drawable.ic_library_books),
@@ -53,6 +56,8 @@ enum class MainTab(@param:StringRes val label: Int, @param:DrawableRes val icon:
 
 @Composable
 fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
+    val translationViewModel: TranslationViewModel = viewModel(factory = TranslationViewModel.Factory)
+    val translation by translationViewModel.state.collectAsStateWithLifecycle()
     val readerState by viewModel.reader.collectAsStateWithLifecycle()
     val readerSettings = remember(settings) { settings.toReaderSettings() }
     var tab by rememberSaveable { mutableStateOf(MainTab.LIBRARY) }
@@ -115,11 +120,18 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
                 MainTab.READER -> ReaderScreen(
                     state = readerState,
                     settings = readerSettings,
+                    seekBarPosition = settings.seekBarPosition,
                     chromeVisible = readerChromeVisible,
                     contentPadding = innerPadding,
                     onToggleChrome = { readerChromeVisible = !readerChromeVisible },
                     onHideChrome = { readerChromeVisible = false },
                     onPositionChange = viewModel::savePosition,
+                    onTranslate = { selection ->
+                        translationViewModel.translate(
+                            excerpt = selection.excerpt(settings.translation.contextWords),
+                            settings = settings.translation,
+                        )
+                    },
                     onOpenLibrary = { tab = MainTab.LIBRARY },
                 )
                 MainTab.SETTINGS -> SettingsScreen(
@@ -127,10 +139,25 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
                     contentPadding = innerPadding,
                     onThemeChange = viewModel::setTheme,
                     onFontSizeChange = viewModel::setFontSize,
+                    onJustifyChange = viewModel::setJustify,
                     onHyphenationChange = viewModel::setHyphenation,
+                    onSeekBarPositionChange = viewModel::setSeekBarPosition,
+                    onTranslationChange = viewModel::updateTranslationSettings,
                 )
             }
         }
+    }
+
+    translation?.let { state ->
+        TranslationSheet(
+            state = state,
+            onRetry = translationViewModel::retry,
+            onOpenSettings = {
+                translationViewModel.dismiss()
+                tab = MainTab.SETTINGS
+            },
+            onDismiss = translationViewModel::dismiss,
+        )
     }
 }
 

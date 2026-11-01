@@ -14,8 +14,10 @@ data class ReaderSettings(
     /** Line height relative to the font size. */
     val lineHeight: Float = 1.4f,
     val pagePadding: Dp = 12.dp,
+    /** Stretch the spaces so that lines end evenly at the right edge. */
+    val justify: Boolean = true,
     /** Split words at line ends; when off, lines are wrapped by whole words only. */
     val hyphenation: Boolean = false,
 )
 
-fun AppSettings.toReaderSettings() = ReaderSettings(fontSize = fontSize.sp, hyphenation = hyphenation)
+fun AppSettings.toReaderSettings() = ReaderSettings(fontSize = fontSize.sp, justify = justify, hyphenation = hyphenation)

@@ -1,7 +1,6 @@
 package ru.nikitagrgv.breader.ui.reader
 
 import android.content.ClipData
-import android.content.Intent
 import android.os.Build
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
@@ -15,12 +14,14 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.absolutePadding
 import androidx.compose.foundation.layout.add
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.displayCutout
@@ -59,6 +60,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
@@ -79,6 +81,7 @@ import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextIndent
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import kotlinx.coroutines.awaitCancellation
@@ -87,9 +90,11 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import ru.nikitagrgv.breader.R
 import ru.nikitagrgv.breader.data.ReadingPosition
+import ru.nikitagrgv.breader.data.SeekBarPosition
 import ru.nikitagrgv.breader.format.InlineStyle
 import ru.nikitagrgv.breader.format.Paragraph
 import ru.nikitagrgv.breader.format.ParagraphKind
+import ru.nikitagrgv.breader.translation.BookSelection
 import kotlin.math.roundToInt
 
 /**
@@ -100,11 +105,13 @@ import kotlin.math.roundToInt
 fun ReaderScreen(
     state: ReaderState,
     settings: ReaderSettings,
+    seekBarPosition: SeekBarPosition,
     chromeVisible: Boolean,
     contentPadding: PaddingValues,
     onToggleChrome: () -> Unit,
     onHideChrome: () -> Unit,
     onPositionChange: (bookId: String, position: ReadingPosition, progress: Float) -> Unit,
+    onTranslate: (BookSelection) -> Unit,
     onOpenLibrary: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -129,11 +136,13 @@ fun ReaderScreen(
                     BookText(
                         state = state,
                         settings = settings,
+                        seekBarPosition = seekBarPosition,
                         chromeVisible = chromeVisible,
                         contentPadding = contentPadding,
                         onToggleChrome = onToggleChrome,
                         onHideChrome = onHideChrome,
                         onPositionChange = { position, progress -> onPositionChange(state.bookId, position, progress) },
+                        onTranslate = onTranslate,
                     )
                 }
             }
@@ -145,18 +154,20 @@ fun ReaderScreen(
 @Composable
 fun ReaderTextPreview(text: String, settings: ReaderSettings, modifier: Modifier = Modifier) {
     val looks = rememberParagraphLooks(settings)
-    ParagraphText(Paragraph(text), looks.getValue(ParagraphKind.BODY), modifier)
+    ParagraphText(Paragraph(text), index = null, looks.getValue(ParagraphKind.BODY), modifier)
 }
 
 @Composable
 private fun BookText(
     state: ReaderState.Ready,
     settings: ReaderSettings,
+    seekBarPosition: SeekBarPosition,
     chromeVisible: Boolean,
     contentPadding: PaddingValues,
     onToggleChrome: () -> Unit,
     onHideChrome: () -> Unit,
     onPositionChange: (ReadingPosition, Float) -> Unit,
+    onTranslate: (BookSelection) -> Unit,
 ) {
     val paragraphs = state.content.paragraphs
     val looks = rememberParagraphLooks(settings)
@@ -228,7 +239,7 @@ private fun BookText(
                 ) {
                     items(count = paragraphs.size, contentType = { paragraphs[it].kind }) { index ->
                         val paragraph = paragraphs[index]
-                        ParagraphText(paragraph, looks.getValue(paragraph.kind))
+                        ParagraphText(paragraph, index, looks.getValue(paragraph.kind))
                     }
                 }
             }
@@ -247,28 +258,15 @@ private fun BookText(
             )
         }
 
-        // Between the top bar and the navigation bar, over the left edge of the text.
-        AnimatedVisibility(
+        SeekBarOverlay(
+            position = seekBarPosition,
             visible = chromeVisible,
-            enter = fadeIn() + slideInHorizontally { -it },
-            exit = fadeOut() + slideOutHorizontally { -it },
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Start))
-                .padding(
-                    start = 8.dp,
-                    top = with(LocalDensity.current) { topBarHeight.toDp() } + 12.dp,
-                    bottom = contentPadding.calculateBottomPadding() + 12.dp,
-                )
-                .fillMaxHeight(),
-        ) {
-            BookSeekBar(
-                fraction = seekFraction ?: progress ?: 0f,
-                onSeek = { seekFraction = it },
-                onSeekFinished = { seekFraction = null },
-                modifier = Modifier.fillMaxHeight(),
-            )
-        }
+            topBarHeight = with(LocalDensity.current) { topBarHeight.toDp() },
+            bottomBarHeight = contentPadding.calculateBottomPadding(),
+            fraction = seekFraction ?: progress ?: 0f,
+            onSeek = { seekFraction = it },
+            onSeekFinished = { seekFraction = null },
+        )
 
         AnimatedVisibility(
             visible = hasSelection,
@@ -286,16 +284,68 @@ private fun BookText(
                     }
                     selectionState.clear()
                 },
-                onShare = {
-                    val send = Intent(Intent.ACTION_SEND)
-                        .setType("text/plain")
-                        .putExtra(Intent.EXTRA_TEXT, selectionState.selectedText())
-                    context.startActivity(Intent.createChooser(send, null))
+                onTranslate = {
+                    selectionState.locate(paragraphs)?.let(onTranslate)
                     selectionState.clear()
                 },
                 onClear = selectionState::clear,
             )
         }
+    }
+}
+
+/**
+ * [BookSeekBar] over the text along the screen edge at [position], clear of the top and bottom bars.
+ * It comes and goes with them, sliding from its edge.
+ */
+@Composable
+private fun BoxScope.SeekBarOverlay(
+    position: SeekBarPosition,
+    visible: Boolean,
+    topBarHeight: Dp,
+    bottomBarHeight: Dp,
+    fraction: Float,
+    onSeek: (Float) -> Unit,
+    onSeekFinished: () -> Unit,
+) {
+    val vertical = position.isVertical
+    // Toward its own edge: up or left is negative.
+    val hiddenOffset: (Int) -> Int = when (position) {
+        SeekBarPosition.LEFT, SeekBarPosition.TOP -> { size -> -size }
+        SeekBarPosition.RIGHT, SeekBarPosition.BOTTOM -> { size -> size }
+    }
+    // Left and right are physical sides, the same in right-to-left languages.
+    val placement = when (position) {
+        SeekBarPosition.LEFT -> Modifier
+            .align(AbsoluteAlignment.TopLeft)
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Left))
+            .absolutePadding(left = 8.dp, top = topBarHeight + 12.dp, bottom = bottomBarHeight + 12.dp)
+        SeekBarPosition.RIGHT -> Modifier
+            .align(AbsoluteAlignment.TopRight)
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Right))
+            .absolutePadding(right = 8.dp, top = topBarHeight + 12.dp, bottom = bottomBarHeight + 12.dp)
+        SeekBarPosition.TOP -> Modifier
+            .align(Alignment.TopCenter)
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+            .padding(start = 12.dp, end = 12.dp, top = topBarHeight + 8.dp)
+        SeekBarPosition.BOTTOM -> Modifier
+            .align(Alignment.BottomCenter)
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+            .padding(start = 12.dp, end = 12.dp, bottom = bottomBarHeight + 8.dp)
+    }
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn() + if (vertical) slideInHorizontally(initialOffsetX = hiddenOffset) else slideInVertically(initialOffsetY = hiddenOffset),
+        exit = fadeOut() + if (vertical) slideOutHorizontally(targetOffsetX = hiddenOffset) else slideOutVertically(targetOffsetY = hiddenOffset),
+        modifier = placement.then(if (vertical) Modifier.fillMaxHeight() else Modifier.fillMaxWidth()),
+    ) {
+        BookSeekBar(
+            fraction = fraction,
+            vertical = vertical,
+            onSeek = onSeek,
+            onSeekFinished = onSeekFinished,
+            modifier = if (vertical) Modifier.fillMaxHeight() else Modifier.fillMaxWidth(),
+        )
     }
 }
 
@@ -318,9 +368,10 @@ private fun LazyListState.readingProgress(): Float? {
     }
 }
 
+/** @param index the paragraph's index in the book, if it's from the book. */
 @Composable
-private fun ParagraphText(paragraph: Paragraph, look: ParagraphLook, modifier: Modifier = Modifier) {
-    val text = remember(paragraph) { paragraph.toAnnotatedString() }
+private fun ParagraphText(paragraph: Paragraph, index: Int?, look: ParagraphLook, modifier: Modifier = Modifier) {
+    val text = remember(paragraph, index) { paragraph.toAnnotatedString(index) }
     Text(
         text = text,
         style = look.style,
@@ -330,18 +381,16 @@ private fun ParagraphText(paragraph: Paragraph, look: ParagraphLook, modifier: M
     )
 }
 
-private fun Paragraph.toAnnotatedString(): AnnotatedString {
-    if (spans.isEmpty()) return AnnotatedString(text)
-    return buildAnnotatedString {
-        append(text)
-        for (span in spans) {
-            val style = when (span.style) {
-                InlineStyle.BOLD -> SpanStyle(fontWeight = FontWeight.Bold)
-                InlineStyle.ITALIC -> SpanStyle(fontStyle = FontStyle.Italic)
-            }
-            addStyle(style, span.start, span.end)
+private fun Paragraph.toAnnotatedString(index: Int?): AnnotatedString = buildAnnotatedString {
+    append(text)
+    for (span in spans) {
+        val style = when (span.style) {
+            InlineStyle.BOLD -> SpanStyle(fontWeight = FontWeight.Bold)
+            InlineStyle.ITALIC -> SpanStyle(fontStyle = FontStyle.Italic)
         }
+        addStyle(style, span.start, span.end)
     }
+    if (index != null) tagParagraph(index)
 }
 
 private class ParagraphLook(val style: TextStyle, val padding: PaddingValues)
@@ -357,7 +406,7 @@ private fun rememberParagraphLooks(settings: ReaderSettings): Map<ParagraphKind,
             color = color,
             fontSize = settings.fontSize,
             lineHeight = settings.lineHeight.em,
-            textAlign = TextAlign.Justify,
+            textAlign = if (settings.justify) TextAlign.Justify else TextAlign.Start,
             textIndent = TextIndent(firstLine = 1.5.em),
             hyphens = if (settings.hyphenation) Hyphens.Auto else Hyphens.None,
             lineBreak = LineBreak.Paragraph,

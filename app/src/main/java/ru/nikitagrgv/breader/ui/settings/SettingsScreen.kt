@@ -15,6 +15,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -32,11 +35,20 @@ import androidx.compose.ui.unit.dp
 import ru.nikitagrgv.breader.R
 import ru.nikitagrgv.breader.data.AppSettings
 import ru.nikitagrgv.breader.data.AppTheme
+import ru.nikitagrgv.breader.data.SeekBarPosition
+import ru.nikitagrgv.breader.data.TranslationSettings
 import ru.nikitagrgv.breader.ui.reader.ReaderTextPreview
 import ru.nikitagrgv.breader.ui.reader.toReaderSettings
 import kotlin.math.roundToInt
 
 private val THEMES = listOf(AppTheme.DARK to R.string.theme_dark, AppTheme.LIGHT to R.string.theme_light)
+
+private val SEEK_BAR_POSITIONS = listOf(
+    SeekBarPosition.LEFT to R.string.position_left,
+    SeekBarPosition.RIGHT to R.string.position_right,
+    SeekBarPosition.TOP to R.string.position_top,
+    SeekBarPosition.BOTTOM to R.string.position_bottom,
+)
 
 @Composable
 fun SettingsScreen(
@@ -44,7 +56,10 @@ fun SettingsScreen(
     contentPadding: PaddingValues,
     onThemeChange: (AppTheme) -> Unit,
     onFontSizeChange: (Float) -> Unit,
+    onJustifyChange: (Boolean) -> Unit,
     onHyphenationChange: (Boolean) -> Unit,
+    onSeekBarPositionChange: (SeekBarPosition) -> Unit,
+    onTranslationChange: ((TranslationSettings) -> TranslationSettings) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // Follows the slider while it's dragged; saved when the finger is lifted.
@@ -98,6 +113,16 @@ fun SettingsScreen(
             )
         }
         ListItem(
+            headlineContent = { Text(stringResource(R.string.justify)) },
+            supportingContent = { Text(stringResource(R.string.justify_summary)) },
+            trailingContent = { Switch(checked = settings.justify, onCheckedChange = null) },
+            modifier = Modifier.toggleable(
+                value = settings.justify,
+                role = Role.Switch,
+                onValueChange = onJustifyChange,
+            ),
+        )
+        ListItem(
             headlineContent = { Text(stringResource(R.string.hyphenation)) },
             supportingContent = { Text(stringResource(R.string.hyphenation_summary)) },
             trailingContent = { Switch(checked = settings.hyphenation, onCheckedChange = null) },
@@ -108,7 +133,7 @@ fun SettingsScreen(
             ),
         )
 
-        // Rendered with the reader's own text style, so both settings can be judged right here.
+        // Rendered with the reader's own text style, so the settings above can be judged right here.
         Surface(
             shape = MaterialTheme.shapes.medium,
             color = MaterialTheme.colorScheme.background,
@@ -123,6 +148,31 @@ fun SettingsScreen(
                 modifier = Modifier.padding(12.dp),
             )
         }
+
+        SectionHeader(R.string.settings_seek_bar)
+        Text(
+            text = stringResource(R.string.seek_bar_summary),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        )
+        SingleChoiceSegmentedButtonRow(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+        ) {
+            SEEK_BAR_POSITIONS.forEachIndexed { index, (position, label) ->
+                SegmentedButton(
+                    selected = settings.seekBarPosition == position,
+                    onClick = { onSeekBarPositionChange(position) },
+                    shape = SegmentedButtonDefaults.itemShape(index, SEEK_BAR_POSITIONS.size),
+                    label = { Text(stringResource(label)) },
+                )
+            }
+        }
+
+        SectionHeader(R.string.settings_translation)
+        TranslationSection(settings.translation, onTranslationChange)
     }
 }
 

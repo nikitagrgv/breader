@@ -31,7 +31,7 @@ import ru.nikitagrgv.breader.R
 @Composable
 fun SelectionBar(
     onCopy: () -> Unit,
-    onShare: () -> Unit,
+    onTranslate: () -> Unit,
     onClear: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -43,7 +43,7 @@ fun SelectionBar(
                 .padding(horizontal = 8.dp, vertical = 4.dp),
         ) {
             SelectionAction(R.drawable.ic_copy, R.string.copy, onCopy)
-            SelectionAction(R.drawable.ic_share, R.string.share, onShare)
+            SelectionAction(R.drawable.ic_translate, R.string.translate, onTranslate)
             Spacer(Modifier.weight(1f))
             IconButton(onClick = onClear) {
                 Icon(painterResource(R.drawable.ic_close), contentDescription = stringResource(R.string.clear_selection))

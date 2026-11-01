@@ -27,7 +27,9 @@ import ru.nikitagrgv.breader.data.BookFiles
 import ru.nikitagrgv.breader.data.Library
 import ru.nikitagrgv.breader.data.LibraryRepository
 import ru.nikitagrgv.breader.data.ReadingPosition
+import ru.nikitagrgv.breader.data.SeekBarPosition
 import ru.nikitagrgv.breader.data.SettingsRepository
+import ru.nikitagrgv.breader.data.TranslationSettings
 import ru.nikitagrgv.breader.ui.reader.ReaderState
 import ru.nikitagrgv.breader.ui.reader.bookId
 
@@ -120,8 +122,20 @@ class MainViewModel(
         viewModelScope.launch { settingsRepository.setFontSize(size) }
     }
 
+    fun setJustify(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setJustify(enabled) }
+    }
+
     fun setHyphenation(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setHyphenation(enabled) }
+    }
+
+    fun setSeekBarPosition(position: SeekBarPosition) {
+        viewModelScope.launch { settingsRepository.setSeekBarPosition(position) }
+    }
+
+    fun updateTranslationSettings(transform: (TranslationSettings) -> TranslationSettings) {
+        viewModelScope.launch { settingsRepository.updateTranslation(transform) }
     }
 
     private fun load(book: Book) {

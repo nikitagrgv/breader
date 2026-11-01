@@ -24,7 +24,7 @@
     <string name="progress_percent">%1$d%%</string>
     <string name="book_position">Position in the book</string>
     <string name="copy">Copy</string>
-    <string name="share">Share</string>
+    <string name="translate">Translate</string>
     <string name="copied">Copied</string>
     <string name="clear_selection">Clear selection</string>
 
@@ -35,7 +35,73 @@
     <string name="settings_text">Text</string>
     <string name="font_size">Font size</string>
     <string name="font_size_value">%1$d sp</string>
+    <string name="justify">Justify text</string>
+    <string name="justify_summary">Stretch the spaces so that lines end evenly at the right edge. Android shows the selection shifted on such lines, the more the further right.</string>
     <string name="hyphenation">Hyphenation</string>
     <string name="hyphenation_summary">Split long words at the end of a line. When off, lines break between whole words.</string>
-    <string name="text_preview">Hyphenation splits extraordinarily long words, while without it the lines are wrapped by whole words and the spaces between them are stretched.</string>
+    <string name="text_preview">Justification stretches the spaces between words, so that every line ends at the right edge, and hyphenation splits extraordinarily long words to keep those spaces small.</string>
+
+    <string name="settings_seek_bar">Scroll bar</string>
+    <string name="seek_bar_summary">Where the bar for jumping through the book is, when the bars are shown.</string>
+    <string name="position_left">Left</string>
+    <string name="position_right">Right</string>
+    <string name="position_top">Top</string>
+    <string name="position_bottom">Bottom</string>
+
+    <string name="settings_translation">Translation</string>
+    <string name="openrouter_key">OpenRouter API key</string>
+    <string name="openrouter_key_hint">Get one at &lt;a href="https://openrouter.ai/keys"&gt;openrouter.ai/keys&lt;/a&gt;</string>
+    <string name="show_key">Show key</string>
+    <string name="hide_key">Hide key</string>
+    <string name="source_language">Translate from</string>
+    <string name="source_language_auto">Detect</string>
+    <string name="target_language">Translate into</string>
+    <string name="languages_hint">Leave empty to detect the book language and to translate into %1$s, the device language.</string>
+    <string name="translation_models">Models</string>
+    <string name="translation_models_none">None picked. All the picked models are asked at once.</string>
+    <string name="context_words">Context</string>
+    <plurals name="context_words_value">
+        <item quantity="one">%1$d word on each side</item>
+        <item quantity="other">%1$d words on each side</item>
+    </plurals>
+    <string name="context_words_summary">Text around the selection sent along with it, so the right meaning is picked.</string>
+
+    <string name="models_title">Translation models</string>
+    <plurals name="models_selected">
+        <item quantity="one">%1$d picked</item>
+        <item quantity="other">%1$d picked</item>
+    </plurals>
+    <string name="save">Save</string>
+    <string name="close">Close</string>
+    <string name="search_models">Search models</string>
+    <string name="clear_search">Clear search</string>
+    <string name="sort_price">Cheapest</string>
+    <string name="sort_popularity">Popular</string>
+    <string name="sort_intelligence">Smartest</string>
+    <string name="sort_speed">Fastest</string>
+    <string name="sort_newest">Newest</string>
+    <string name="filter_free">Free</string>
+    <string name="filter_selected">Picked</string>
+    <string name="price_free">Free</string>
+    <string name="price_per_million">$%1$s in · $%2$s out per 1M tokens</string>
+    <string name="price_unknown">Price depends on the routed model</string>
+    <string name="models_failed">Couldn\'t load the models. Check the connection.</string>
+    <string name="models_empty">No models match.</string>
+    <string name="retry">Retry</string>
+
+    <string name="translation_setup_needed">To translate, add an OpenRouter API key and pick models in the settings.</string>
+    <string name="open_settings">Open settings</string>
+    <string name="translation_alternatives">Also</string>
+    <string name="translation_notes">Notes</string>
+    <plurals name="translation_waiting">
+        <item quantity="one">Waiting for %2$s</item>
+        <item quantity="other">Waiting for %1$d models: %2$s</item>
+    </plurals>
+    <string name="error_invalid_key">Invalid API key</string>
+    <string name="error_no_credits">Not enough credits on the OpenRouter account</string>
+    <string name="error_rate_limited">Rate-limited, try again later</string>
+    <string name="error_timeout">No reply in time</string>
+    <string name="error_network">No connection</string>
+    <string name="error_bad_reply">The reply has no translation</string>
+    <string name="error_unknown">Unknown error</string>
 </resources>
