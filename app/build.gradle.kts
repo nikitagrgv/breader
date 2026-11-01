@@ -21,6 +21,8 @@ android {
 
     buildTypes {
         release {
+            // No release keystore yet: the debug key makes the APK installable.
+            signingConfig = signingConfigs.getByName("debug")
             optimization {
                 enable = true
                 packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")
