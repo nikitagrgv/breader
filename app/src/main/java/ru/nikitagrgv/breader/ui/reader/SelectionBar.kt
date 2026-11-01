@@ -100,7 +100,12 @@ fun SelectionBar(
                         contentDescription = stringResource(if (moreOpen) R.string.fewer_actions else R.string.more_actions),
                     )
                 }
-                SelectionAction(R.drawable.ic_dictionary, R.string.dictionary, onLookUp)
+                SelectionAction(
+                    icon = if (favorite) R.drawable.ic_star else R.drawable.ic_star_outline,
+                    label = if (favorite) R.string.remove_from_favorites else R.string.add_to_favorites,
+                    onClick = onFavorite,
+                    tint = if (favorite) MaterialTheme.colorScheme.primary else Color.Unspecified,
+                )
                 TranslateButtons(
                     onTranslate = onTranslate,
                     onQuickTranslate = onQuickTranslate,
@@ -108,12 +113,7 @@ fun SelectionBar(
                     onAutoTranslateChange = onAutoTranslateChange,
                     modifier = Modifier.weight(1.6f),
                 )
-                SelectionAction(
-                    icon = if (favorite) R.drawable.ic_star else R.drawable.ic_star_outline,
-                    label = if (favorite) R.string.remove_from_favorites else R.string.add_to_favorites,
-                    onClick = onFavorite,
-                    tint = if (favorite) MaterialTheme.colorScheme.primary else Color.Unspecified,
-                )
+                SelectionAction(R.drawable.ic_dictionary, R.string.dictionary, onLookUp)
             }
         }
     }
