@@ -93,6 +93,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import ru.nikitagrgv.breader.R
 import ru.nikitagrgv.breader.data.ReadingPosition
+import ru.nikitagrgv.breader.data.favoriteKey
 import ru.nikitagrgv.breader.data.SeekBarPosition
 import ru.nikitagrgv.breader.format.InlineStyle
 import ru.nikitagrgv.breader.format.Paragraph
@@ -130,6 +131,11 @@ fun ReaderScreen(
     onAutoTranslateChange: (Boolean) -> Unit,
     onLookUp: (BookSelection) -> Unit,
     onGrammar: (BookSelection) -> Unit,
+    onQuickTranslate: (BookSelection) -> Unit,
+    favoriteKeys: Set<String>,
+    onFavorite: (BookSelection) -> Unit,
+    moreSelectionActions: Boolean,
+    onMoreSelectionActionsChange: (Boolean) -> Unit,
     onOpenLibrary: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -169,6 +175,11 @@ fun ReaderScreen(
                         onAutoTranslateChange = onAutoTranslateChange,
                         onLookUp = onLookUp,
                         onGrammar = onGrammar,
+                        onQuickTranslate = onQuickTranslate,
+                        favoriteKeys = favoriteKeys,
+                        onFavorite = onFavorite,
+                        moreSelectionActions = moreSelectionActions,
+                        onMoreSelectionActionsChange = onMoreSelectionActionsChange,
                     )
                 }
             }
@@ -202,6 +213,11 @@ private fun BookText(
     onAutoTranslateChange: (Boolean) -> Unit,
     onLookUp: (BookSelection) -> Unit,
     onGrammar: (BookSelection) -> Unit,
+    onQuickTranslate: (BookSelection) -> Unit,
+    favoriteKeys: Set<String>,
+    onFavorite: (BookSelection) -> Unit,
+    moreSelectionActions: Boolean,
+    onMoreSelectionActionsChange: (Boolean) -> Unit,
 ) {
     val paragraphs = state.content.paragraphs
     val looks = rememberParagraphLooks(settings)
@@ -214,6 +230,7 @@ private fun BookText(
     val hasSelection by remember(selectionState) {
         derivedStateOf { selectionState.selectedTexts.any { it.isNotEmpty() } }
     }
+    val selectedText by remember(selectionState) { derivedStateOf { selectionState.selectedText() } }
     // The position (0..1) the seek bar is dragged to; null while it isn't touched.
     var seekFraction by remember { mutableStateOf<Float?>(null) }
     var topBarHeight by remember { mutableIntStateOf(0) }
@@ -354,6 +371,8 @@ private fun BookText(
                 .padding(bottom = contentPadding.calculateBottomPadding()),
         ) {
             SelectionBar(
+                moreOpen = moreSelectionActions,
+                onMoreOpenChange = onMoreSelectionActionsChange,
                 onCopy = {
                     val text = selectionState.selectedText()
                     scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText(null, text))) }
@@ -367,6 +386,10 @@ private fun BookText(
                     selectionState.locate(paragraphs)?.let(onTranslate)
                     selectionState.clear()
                 },
+                // The selection stays: the quick translation is shown for it, the star is filled for it.
+                onQuickTranslate = { selectionState.locate(paragraphs)?.let(onQuickTranslate) },
+                favorite = favoriteKey(selectedText) in favoriteKeys,
+                onFavorite = { selectionState.locate(paragraphs)?.let(onFavorite) },
                 autoTranslate = autoTranslate,
                 onAutoTranslateChange = onAutoTranslateChange,
                 onLookUp = {
@@ -377,7 +400,6 @@ private fun BookText(
                     selectionState.locate(paragraphs)?.let(onGrammar)
                     selectionState.clear()
                 },
-                onClear = selectionState::clear,
             )
         }
     }

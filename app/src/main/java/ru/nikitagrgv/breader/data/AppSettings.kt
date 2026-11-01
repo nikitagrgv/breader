@@ -24,6 +24,8 @@ data class AppSettings(
     /** Split words at line ends; when off, lines are wrapped by whole words only. */
     val hyphenation: Boolean = false,
     val seekBarPosition: SeekBarPosition = SeekBarPosition.LEFT,
+    /** Whether the extra row of the reader's selection actions is open; it stays as the user left it. */
+    val moreSelectionActions: Boolean = false,
     val translation: TranslationSettings = TranslationSettings(),
 ) {
     companion object {

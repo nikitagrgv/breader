@@ -22,6 +22,7 @@ import ru.nikitagrgv.breader.BreaderApplication
 import ru.nikitagrgv.breader.data.TranslationSettings
 import ru.nikitagrgv.breader.dictionary.DictionaryRepository
 import ru.nikitagrgv.breader.dictionary.DictionaryResult
+import ru.nikitagrgv.breader.dictionary.meaningsLine
 import ru.nikitagrgv.breader.translation.Excerpt
 import ru.nikitagrgv.breader.translation.OpenRouter
 import ru.nikitagrgv.breader.translation.OpenRouterException
@@ -60,11 +61,7 @@ data class TranslationState(
 
     /** All the meanings from the dictionaries in one line; null if they have nothing. */
     val dictionaryLine: String?
-        get() = dictionary
-            .flatMap { result -> result.entries.flatMap { entry -> entry.senses.map { it.gloss } } }
-            .distinct()
-            .joinToString("; ")
-            .ifEmpty { null }
+        get() = dictionary.meaningsLine()
 }
 
 /**
@@ -135,6 +132,16 @@ class TranslationViewModel(
                 }
             }
         }
+    }
+
+    /**
+     * Asks the models for the selected [excerpt] at once and shows the translations at the top, whether or not
+     * they're asked on selection. They stay while the selection does.
+     */
+    fun quickTranslate(excerpt: Excerpt, settings: TranslationSettings) {
+        cancelPending()
+        if (!isCurrent(excerpt, settings, needsModels = true)) start(excerpt, settings, askModels = true)
+        selected.value = true
     }
 
     /** Shows the translation in detail; the one of the preview if it's of the same [excerpt] and the models were asked. */

@@ -3,6 +3,7 @@ package ru.nikitagrgv.breader
 import android.app.Application
 import kotlinx.coroutines.flow.map
 import ru.nikitagrgv.breader.data.BookFiles
+import ru.nikitagrgv.breader.data.FavoritesRepository
 import ru.nikitagrgv.breader.data.LibraryRepository
 import ru.nikitagrgv.breader.data.SettingsRepository
 import ru.nikitagrgv.breader.dictionary.DictionaryRepository
@@ -16,4 +17,5 @@ class BreaderApplication : Application() {
     val openRouter by lazy { OpenRouter() }
     val translationCache by lazy { TranslationCache(this, settingsRepository.settings.map { it.translation.cacheSize }) }
     val dictionaryRepository by lazy { DictionaryRepository(this) }
+    val favoritesRepository by lazy { FavoritesRepository(this) }
 }

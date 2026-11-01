@@ -44,6 +44,13 @@ data class DictionaryInfo(
 /** The entries one dictionary has for a looked up text. */
 data class DictionaryResult(val dictionary: DictionaryInfo, val entries: List<DictionaryEntry>)
 
+/** All the meanings in one line, as a brief translation; null if there are none. */
+fun List<DictionaryResult>.meaningsLine(): String? =
+    flatMap { result -> result.entries.flatMap { entry -> entry.senses.map { it.gloss } } }
+        .distinct()
+        .joinToString("; ")
+        .ifEmpty { null }
+
 sealed interface DownloadState {
     /**
      * @param indexing whether everything is downloaded and the dictionary is being finished.

@@ -132,6 +132,10 @@ class MainViewModel(
         viewModelScope.launch { settingsRepository.setHyphenation(enabled) }
     }
 
+    fun setMoreSelectionActions(open: Boolean) {
+        viewModelScope.launch { settingsRepository.setMoreSelectionActions(open) }
+    }
+
     fun setSeekBarPosition(position: SeekBarPosition) {
         viewModelScope.launch { settingsRepository.setSeekBarPosition(position) }
     }

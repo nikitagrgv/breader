@@ -1,5 +1,6 @@
 package ru.nikitagrgv.breader.ui
 
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.annotation.DrawableRes
@@ -26,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
@@ -39,10 +41,15 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 import ru.nikitagrgv.breader.R
 import ru.nikitagrgv.breader.data.AppSettings
+import ru.nikitagrgv.breader.data.Favorite
+import ru.nikitagrgv.breader.data.favoriteKey
 import ru.nikitagrgv.breader.dictionary.Kaikki
 import ru.nikitagrgv.breader.ui.dictionary.DictionaryManagerDialog
 import ru.nikitagrgv.breader.ui.dictionary.DictionarySheet
 import ru.nikitagrgv.breader.ui.dictionary.DictionaryViewModel
+import ru.nikitagrgv.breader.ui.favorites.FavoritesScreen
+import ru.nikitagrgv.breader.ui.favorites.FavoritesViewModel
+import ru.nikitagrgv.breader.ui.favorites.RemoveFavoritesDialog
 import ru.nikitagrgv.breader.ui.library.AddBooksButton
 import ru.nikitagrgv.breader.ui.library.LibraryScreen
 import ru.nikitagrgv.breader.ui.reader.ReaderScreen
@@ -58,6 +65,7 @@ import ru.nikitagrgv.breader.ui.translation.TranslationViewModel
 enum class MainTab(@param:StringRes val label: Int, @param:DrawableRes val icon: Int) {
     LIBRARY(R.string.tab_library, R.drawable.ic_library_books),
     READER(R.string.tab_reader, R.drawable.ic_book),
+    FAVORITES(R.string.tab_favorites, R.drawable.ic_star),
     SETTINGS(R.string.tab_settings, R.drawable.ic_settings),
 }
 
@@ -73,6 +81,12 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
     val dictionaryLookup by dictionaryViewModel.lookup.collectAsStateWithLifecycle()
     val dictionaries by dictionaryViewModel.installed.collectAsStateWithLifecycle()
     var managingDictionaries by rememberSaveable { mutableStateOf(false) }
+    val favoritesViewModel: FavoritesViewModel = viewModel(factory = FavoritesViewModel.Factory)
+    val favorites by favoritesViewModel.favorites.collectAsStateWithLifecycle()
+    val favoriteKeys by favoritesViewModel.keys.collectAsStateWithLifecycle()
+    // The favorite whose star was pressed again, to confirm removing it.
+    var removingFavorite by remember { mutableStateOf<Favorite?>(null) }
+    val context = LocalContext.current
     val readerState by viewModel.reader.collectAsStateWithLifecycle()
     val library by viewModel.library.collectAsStateWithLifecycle()
     val readerSettings = remember(settings) { settings.toReaderSettings() }
@@ -163,7 +177,37 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
                             settings = settings.translation,
                         )
                     },
+                    onQuickTranslate = { selection ->
+                        val excerpt = selection.excerpt(settings.translation.contextWords)
+                        // Without models, the sheet tells how to set them up.
+                        if (settings.translation.isConfigured) {
+                            translationViewModel.quickTranslate(excerpt, settings.translation)
+                        } else {
+                            translationViewModel.openSheet(excerpt, settings.translation)
+                        }
+                    },
+                    favoriteKeys = favoriteKeys,
+                    onFavorite = { selection ->
+                        val text = selection.excerpt(contextWords = 0).fragment
+                        val favorite = favorites.find { it.key == favoriteKey(text) }
+                        if (favorite != null) {
+                            removingFavorite = favorite
+                        } else {
+                            favoritesViewModel.add(text) {
+                                val message = if (dictionaries.isEmpty()) R.string.favorites_need_dictionary else R.string.favorite_not_found
+                                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    },
+                    moreSelectionActions = settings.moreSelectionActions,
+                    onMoreSelectionActionsChange = viewModel::setMoreSelectionActions,
                     onOpenLibrary = { tab = MainTab.LIBRARY },
+                )
+                MainTab.FAVORITES -> FavoritesScreen(
+                    favorites = favorites,
+                    contentPadding = innerPadding,
+                    onOpen = { favorite -> dictionaryViewModel.lookUp(favorite.word) },
+                    onRemove = favoritesViewModel::remove,
                 )
                 MainTab.SETTINGS -> SettingsScreen(
                     settings = settings,
@@ -216,6 +260,18 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
                 managingDictionaries = true
             },
             onDismiss = dictionaryViewModel::dismissLookup,
+        )
+    }
+
+    removingFavorite?.let { favorite ->
+        RemoveFavoritesDialog(
+            word = favorite.word,
+            count = 1,
+            onConfirm = {
+                favoritesViewModel.remove(setOf(favorite.key))
+                removingFavorite = null
+            },
+            onDismiss = { removingFavorite = null },
         )
     }
 
