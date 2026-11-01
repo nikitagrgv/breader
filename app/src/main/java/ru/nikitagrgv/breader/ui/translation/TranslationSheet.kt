@@ -13,12 +13,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -30,10 +28,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ru.nikitagrgv.breader.R
+import ru.nikitagrgv.breader.ui.BottomSheet
 import ru.nikitagrgv.breader.translation.CombinedTranslation
 import ru.nikitagrgv.breader.translation.combine
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TranslationSheet(
     state: TranslationState,
@@ -41,7 +39,7 @@ fun TranslationSheet(
     onOpenSettings: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    BottomSheet(onDismissRequest = onDismiss) {
         Column(
             Modifier
                 .fillMaxWidth()
@@ -174,7 +172,7 @@ private fun Section(@StringRes title: Int, content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun errorText(error: TranslationError): String = when (error.kind) {
+internal fun errorText(error: TranslationError): String = when (error.kind) {
     TranslationError.Kind.INVALID_KEY -> stringResource(R.string.error_invalid_key)
     TranslationError.Kind.NO_CREDITS -> stringResource(R.string.error_no_credits)
     TranslationError.Kind.RATE_LIMITED -> stringResource(R.string.error_rate_limited)

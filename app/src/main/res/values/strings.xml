@@ -27,6 +27,7 @@
     <string name="translate">Translate</string>
     <string name="dictionary">Dictionary</string>
     <string name="from_dictionary">From the dictionary</string>
+    <string name="grammar">Grammar</string>
     <string name="copied">Copied</string>
     <string name="clear_selection">Clear selection</string>
 
@@ -105,6 +106,8 @@
 
     <string name="translation_setup_needed">To translate, add an OpenRouter API key and pick models in the settings.</string>
     <string name="open_settings">Open settings</string>
+    <string name="grammar_setup_needed">To explain grammar, add an OpenRouter API key and pick models in the settings.</string>
+    <string name="grammar_waiting">Waiting for %1$s</string>
     <string name="translation_alternatives">Also</string>
     <string name="translation_notes">Notes</string>
     <plurals name="translation_waiting">

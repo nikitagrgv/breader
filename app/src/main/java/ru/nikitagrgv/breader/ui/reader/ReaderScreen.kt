@@ -126,6 +126,7 @@ fun ReaderScreen(
     onSelectionChange: (BookSelection?) -> Unit,
     onTranslate: (BookSelection) -> Unit,
     onLookUp: (BookSelection) -> Unit,
+    onGrammar: (BookSelection) -> Unit,
     onOpenLibrary: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -162,6 +163,7 @@ fun ReaderScreen(
                         onSelectionChange = onSelectionChange,
                         onTranslate = onTranslate,
                         onLookUp = onLookUp,
+                        onGrammar = onGrammar,
                     )
                 }
             }
@@ -192,6 +194,7 @@ private fun BookText(
     onSelectionChange: (BookSelection?) -> Unit,
     onTranslate: (BookSelection) -> Unit,
     onLookUp: (BookSelection) -> Unit,
+    onGrammar: (BookSelection) -> Unit,
 ) {
     val paragraphs = state.content.paragraphs
     val looks = rememberParagraphLooks(settings)
@@ -355,6 +358,10 @@ private fun BookText(
                 },
                 onLookUp = {
                     selectionState.locate(paragraphs)?.let(onLookUp)
+                    selectionState.clear()
+                },
+                onGrammar = {
+                    selectionState.locate(paragraphs)?.let(onGrammar)
                     selectionState.clear()
                 },
                 onClear = selectionState::clear,

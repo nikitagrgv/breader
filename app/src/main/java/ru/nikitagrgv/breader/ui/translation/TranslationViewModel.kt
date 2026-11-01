@@ -234,7 +234,7 @@ class TranslationViewModel(
     }
 }
 
-private fun Exception.toTranslationError(): TranslationError {
+internal fun Exception.toTranslationError(): TranslationError {
     val kind = when (this) {
         is OpenRouterException -> when (code) {
             401 -> TranslationError.Kind.INVALID_KEY

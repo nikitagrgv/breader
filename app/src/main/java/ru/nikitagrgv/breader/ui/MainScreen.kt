@@ -50,6 +50,8 @@ import ru.nikitagrgv.breader.ui.reader.ReaderState
 import ru.nikitagrgv.breader.ui.reader.bookId
 import ru.nikitagrgv.breader.ui.reader.toReaderSettings
 import ru.nikitagrgv.breader.ui.settings.SettingsScreen
+import ru.nikitagrgv.breader.ui.translation.GrammarSheet
+import ru.nikitagrgv.breader.ui.translation.GrammarViewModel
 import ru.nikitagrgv.breader.ui.translation.TranslationSheet
 import ru.nikitagrgv.breader.ui.translation.TranslationViewModel
 
@@ -65,6 +67,8 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
     val translation by translationViewModel.sheet.collectAsStateWithLifecycle()
     val translationPreview by translationViewModel.preview.collectAsStateWithLifecycle()
     val cachedTranslations by translationViewModel.cacheSize.collectAsStateWithLifecycle()
+    val grammarViewModel: GrammarViewModel = viewModel(factory = GrammarViewModel.Factory)
+    val grammar by grammarViewModel.state.collectAsStateWithLifecycle()
     val dictionaryViewModel: DictionaryViewModel = viewModel(factory = DictionaryViewModel.Factory)
     val dictionaryLookup by dictionaryViewModel.lookup.collectAsStateWithLifecycle()
     val dictionaries by dictionaryViewModel.installed.collectAsStateWithLifecycle()
@@ -151,6 +155,12 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
                         )
                     },
                     onLookUp = { selection -> dictionaryViewModel.lookUp(selection.excerpt(contextWords = 0).fragment) },
+                    onGrammar = { selection ->
+                        grammarViewModel.explain(
+                            excerpt = selection.excerpt(settings.translation.contextWords),
+                            settings = settings.translation,
+                        )
+                    },
                     onOpenLibrary = { tab = MainTab.LIBRARY },
                 )
                 MainTab.SETTINGS -> SettingsScreen(
@@ -180,6 +190,18 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
                 tab = MainTab.SETTINGS
             },
             onDismiss = translationViewModel::dismissSheet,
+        )
+    }
+
+    grammar?.let { state ->
+        GrammarSheet(
+            state = state,
+            onRetry = grammarViewModel::retry,
+            onOpenSettings = {
+                grammarViewModel.dismiss()
+                tab = MainTab.SETTINGS
+            },
+            onDismiss = grammarViewModel::dismiss,
         )
     }
 

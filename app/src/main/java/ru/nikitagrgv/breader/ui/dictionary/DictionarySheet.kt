@@ -12,10 +12,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -25,6 +23,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ru.nikitagrgv.breader.R
+import ru.nikitagrgv.breader.ui.BottomSheet
 import ru.nikitagrgv.breader.dictionary.DictionaryEntry
 import ru.nikitagrgv.breader.dictionary.DictionaryResult
 
@@ -32,7 +31,6 @@ import ru.nikitagrgv.breader.dictionary.DictionaryResult
  * The dictionary entries of the selected text in detail: all the senses with examples.
  * @param hasDictionaries whether any are downloaded; if not, [onOpenDictionaries] is offered.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DictionarySheet(
     lookup: DictionaryLookup,
@@ -40,7 +38,7 @@ fun DictionarySheet(
     onOpenDictionaries: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    BottomSheet(onDismissRequest = onDismiss) {
         Column(
             Modifier
                 .fillMaxWidth()
