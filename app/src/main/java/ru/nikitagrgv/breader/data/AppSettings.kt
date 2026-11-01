@@ -20,7 +20,7 @@ data class AppSettings(
      * Stretch the spaces so that lines end evenly at the right edge. Android places the selection
      * highlight on justified lines as if they weren't stretched, so it's off by a few words there.
      */
-    val justify: Boolean = true,
+    val justify: Boolean = false,
     /** Split words at line ends; when off, lines are wrapped by whole words only. */
     val hyphenation: Boolean = false,
     val seekBarPosition: SeekBarPosition = SeekBarPosition.LEFT,
