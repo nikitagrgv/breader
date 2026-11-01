@@ -12,6 +12,8 @@ data class Paragraph(
     val text: String,
     val kind: ParagraphKind = ParagraphKind.BODY,
     val spans: List<StyledRange> = emptyList(),
+    /** Empty lines the book puts before the paragraph, e.g. to set off a chapter. */
+    val blankLinesBefore: Int = 0,
 )
 
 enum class ParagraphKind { BODY, HEADING, SUBTITLE, VERSE, QUOTE }

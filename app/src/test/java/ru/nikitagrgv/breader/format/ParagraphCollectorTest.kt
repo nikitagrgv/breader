@@ -79,4 +79,47 @@ class ParagraphCollectorTest {
         assertEquals(listOf(Paragraph("line", ParagraphKind.VERSE)), collector.paragraphs)
         assertTrue(collector.paragraphs.single().spans.isEmpty())
     }
+
+    /** Emulates FB2: paragraphs and <empty-line/> elements, given as nulls. */
+    private fun collect(vararg items: String?): List<Paragraph> {
+        val collector = ParagraphCollector()
+        for (item in items) {
+            if (item == null) {
+                collector.endParagraph(ParagraphKind.BODY)
+                collector.blankLine()
+            } else {
+                collector.append(item)
+                collector.endParagraph(ParagraphKind.BODY)
+            }
+        }
+        return collector.paragraphs
+    }
+
+    @Test
+    fun `empty lines go before the next paragraph`() {
+        assertEquals(
+            listOf(Paragraph("One."), Paragraph("Two.", blankLinesBefore = 2)),
+            collect("One.", null, null, "Two."),
+        )
+    }
+
+    @Test
+    fun `a number set off by empty lines becomes a heading`() {
+        assertEquals(
+            listOf(
+                Paragraph("End."),
+                Paragraph("23", ParagraphKind.HEADING),
+                // The heading's own spacing is enough.
+                Paragraph("Start."),
+            ),
+            collect("End.", null, null, null, null, "23", null, null, "Start."),
+        )
+        assertEquals(ParagraphKind.HEADING, collect("A.", null, "XIV.")[1].kind)
+    }
+
+    @Test
+    fun `a number without empty lines before it stays text`() {
+        assertEquals(listOf(Paragraph("He said:"), Paragraph("23")), collect("He said:", "23"))
+        assertEquals(ParagraphKind.BODY, collect("A.", null, "23 years later.")[1].kind)
+    }
 }

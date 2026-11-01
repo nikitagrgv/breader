@@ -171,6 +171,7 @@ private fun BookText(
 ) {
     val paragraphs = state.content.paragraphs
     val looks = rememberParagraphLooks(settings)
+    val blankLine = with(LocalDensity.current) { settings.fontSize.toDp() } * settings.lineHeight
     // Saveable, so the position survives switching tabs and configuration changes.
     val listState = rememberLazyListState(state.initialPosition.paragraph, state.initialPosition.offset)
     val progress by remember(listState) { derivedStateOf { listState.readingProgress() } }
@@ -239,7 +240,14 @@ private fun BookText(
                 ) {
                     items(count = paragraphs.size, contentType = { paragraphs[it].kind }) { index ->
                         val paragraph = paragraphs[index]
-                        ParagraphText(paragraph, index, looks.getValue(paragraph.kind))
+                        // Capped: some books stack many empty lines, which would leave half a screen empty.
+                        val blankLines = paragraph.blankLinesBefore.coerceAtMost(MAX_BLANK_LINES)
+                        ParagraphText(
+                            paragraph = paragraph,
+                            index = index,
+                            look = looks.getValue(paragraph.kind),
+                            modifier = if (blankLines > 0) Modifier.padding(top = blankLine * blankLines) else Modifier,
+                        )
                     }
                 }
             }
@@ -348,6 +356,8 @@ private fun BoxScope.SeekBarOverlay(
         )
     }
 }
+
+private const val MAX_BLANK_LINES = 2
 
 /** Selected parts of the paragraphs, one per line. */
 private fun SelectionState.selectedText(): String = selectedTexts.joinToString("\n") { it.text }

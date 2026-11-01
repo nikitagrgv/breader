@@ -8,6 +8,7 @@ internal class ParagraphCollector {
     private val ranges = ArrayList<StyledRange>()
     private val openStyles = ArrayList<OpenStyle>()
     private var pendingSpace = false
+    private var pendingBlankLines = 0
 
     fun append(chars: String) {
         for (c in chars) {
@@ -25,6 +26,11 @@ internal class ParagraphCollector {
     fun lineBreak() {
         if (text.isNotEmpty() && text.last() != '\n') text.append('\n')
         pendingSpace = false
+    }
+
+    /** An empty line between paragraphs; it goes before the next paragraph. */
+    fun blankLine() {
+        pendingBlankLines++
     }
 
     fun startStyle(style: InlineStyle) {
@@ -50,7 +56,18 @@ internal class ParagraphCollector {
                 val spanEnd = minOf(it.end, end) - start
                 if (spanEnd > spanStart) it.copy(start = spanStart, end = spanEnd) else null
             }
-            paragraphs += Paragraph(text.substring(start, end), kind, spans)
+            val paragraphText = text.substring(start, end)
+            // Some books have no chapter titles, only a number set off by empty lines.
+            val isChapterNumber = kind == ParagraphKind.BODY && pendingBlankLines > 0 && CHAPTER_NUMBER.matches(paragraphText)
+            // A heading is set off by its own spacing.
+            val afterHeading = paragraphs.lastOrNull()?.kind == ParagraphKind.HEADING
+            paragraphs += Paragraph(
+                text = paragraphText,
+                kind = if (isChapterNumber) ParagraphKind.HEADING else kind,
+                spans = spans,
+                blankLinesBefore = if (isChapterNumber || afterHeading) 0 else pendingBlankLines,
+            )
+            pendingBlankLines = 0
         }
         // Styles that are still open continue into the next paragraph.
         for (i in openStyles.indices) openStyles[i] = openStyles[i].copy(start = 0)
@@ -64,4 +81,9 @@ internal class ParagraphCollector {
     }
 
     private data class OpenStyle(val style: InlineStyle, val start: Int)
+
+    private companion object {
+        /** "23", "23." or a Roman numeral like "XIV". */
+        val CHAPTER_NUMBER = Regex("[0-9]{1,4}[.]?|[IVXLCDM]{1,8}[.]?")
+    }
 }

@@ -70,6 +70,7 @@ private class Fb2Reader(private val parser: XmlPullParser, private val metadataO
                 "strong" -> out.startStyle(InlineStyle.BOLD)
                 "emphasis" -> out.startStyle(InlineStyle.ITALIC)
             }
+            if (name == "empty-line") out.blankLine()
         } else {
             text.setLength(0)
             if (name == "body") inBody = true
