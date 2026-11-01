@@ -56,9 +56,9 @@ fun SelectionBar(
             IconButton(onClick = onCopy) {
                 Icon(painterResource(R.drawable.ic_copy), contentDescription = stringResource(R.string.copy))
             }
-            SelectionAction(R.drawable.ic_translate, R.string.translate, onTranslate)
-            SelectionAction(R.drawable.ic_dictionary, R.string.dictionary, onLookUp)
             SelectionAction(R.drawable.ic_grammar, R.string.grammar, onGrammar)
+            SelectionAction(R.drawable.ic_dictionary, R.string.dictionary, onLookUp)
+            SelectionAction(R.drawable.ic_translate, R.string.translate, onTranslate)
             IconButton(onClick = onClear) {
                 Icon(painterResource(R.drawable.ic_close), contentDescription = stringResource(R.string.clear_selection))
             }
