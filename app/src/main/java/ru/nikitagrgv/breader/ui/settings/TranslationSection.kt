@@ -11,6 +11,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -42,11 +43,16 @@ import ru.nikitagrgv.breader.data.TranslationSettings
 import ru.nikitagrgv.breader.ui.translation.shortModelName
 import kotlin.math.roundToInt
 
-/** @param onChange gets a function that makes the new settings out of the stored ones. */
+/**
+ * @param onChange gets a function that makes the new settings out of the stored ones.
+ * @param cached the number of fragments in the translation cache.
+ */
 @Composable
 fun TranslationSection(
     settings: TranslationSettings,
     onChange: ((TranslationSettings) -> TranslationSettings) -> Unit,
+    cached: Int,
+    onClearCache: () -> Unit,
 ) {
     // The fields keep their own text: the stored one comes back a moment later and would move the cursor.
     var apiKey by remember { mutableStateOf(settings.apiKey) }
@@ -55,6 +61,7 @@ fun TranslationSection(
     var targetLanguage by remember { mutableStateOf(settings.targetLanguage) }
     // Follows the slider while it's dragged; saved when the finger is lifted.
     var contextWords by remember(settings.contextWords) { mutableFloatStateOf(settings.contextWords.toFloat()) }
+    var cacheSize by remember(settings.cacheSize) { mutableFloatStateOf(settings.cacheSize.toFloat()) }
     var pickingModels by rememberSaveable { mutableStateOf(false) }
 
     Column(
@@ -161,6 +168,52 @@ fun TranslationSection(
             valueRange = 0f..TranslationSettings.MAX_CONTEXT_WORDS.toFloat(),
             steps = TranslationSettings.MAX_CONTEXT_WORDS / TranslationSettings.CONTEXT_WORDS_STEP - 1,
         )
+    }
+
+    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = stringResource(R.string.translation_cache),
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(1f),
+            )
+            val size = cacheSize.roundToInt()
+            Text(
+                text = if (size == 0) {
+                    stringResource(R.string.translation_cache_off)
+                } else {
+                    pluralStringResource(R.plurals.translation_cache_value, size, size)
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Text(
+            text = stringResource(R.string.translation_cache_summary),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Slider(
+            value = cacheSize,
+            onValueChange = { cacheSize = it },
+            onValueChangeFinished = {
+                val size = cacheSize.roundToInt()
+                onChange { it.copy(cacheSize = size) }
+            },
+            valueRange = 0f..TranslationSettings.MAX_CACHE_SIZE.toFloat(),
+            steps = TranslationSettings.MAX_CACHE_SIZE / TranslationSettings.CACHE_SIZE_STEP - 1,
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = pluralStringResource(R.plurals.translation_cache_used, cached, cached),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            OutlinedButton(onClick = onClearCache, enabled = cached > 0) {
+                Text(stringResource(R.string.clear_cache))
+            }
+        }
     }
 
     if (pickingModels) {

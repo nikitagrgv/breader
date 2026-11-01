@@ -57,7 +57,9 @@ enum class MainTab(@param:StringRes val label: Int, @param:DrawableRes val icon:
 @Composable
 fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
     val translationViewModel: TranslationViewModel = viewModel(factory = TranslationViewModel.Factory)
-    val translation by translationViewModel.state.collectAsStateWithLifecycle()
+    val translation by translationViewModel.sheet.collectAsStateWithLifecycle()
+    val translationPreview by translationViewModel.preview.collectAsStateWithLifecycle()
+    val cachedTranslations by translationViewModel.cacheSize.collectAsStateWithLifecycle()
     val readerState by viewModel.reader.collectAsStateWithLifecycle()
     val readerSettings = remember(settings) { settings.toReaderSettings() }
     var tab by rememberSaveable { mutableStateOf(MainTab.LIBRARY) }
@@ -126,8 +128,15 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
                     onToggleChrome = { readerChromeVisible = !readerChromeVisible },
                     onHideChrome = { readerChromeVisible = false },
                     onPositionChange = viewModel::savePosition,
+                    translationPreview = translationPreview,
+                    onSelectionChange = { selection ->
+                        translationViewModel.select(
+                            excerpt = selection?.excerpt(settings.translation.contextWords),
+                            settings = settings.translation,
+                        )
+                    },
                     onTranslate = { selection ->
-                        translationViewModel.translate(
+                        translationViewModel.openSheet(
                             excerpt = selection.excerpt(settings.translation.contextWords),
                             settings = settings.translation,
                         )
@@ -143,6 +152,8 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
                     onHyphenationChange = viewModel::setHyphenation,
                     onSeekBarPositionChange = viewModel::setSeekBarPosition,
                     onTranslationChange = viewModel::updateTranslationSettings,
+                    cachedTranslations = cachedTranslations,
+                    onClearTranslationCache = translationViewModel::clearCache,
                 )
             }
         }
@@ -153,10 +164,10 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
             state = state,
             onRetry = translationViewModel::retry,
             onOpenSettings = {
-                translationViewModel.dismiss()
+                translationViewModel.dismissSheet()
                 tab = MainTab.SETTINGS
             },
-            onDismiss = translationViewModel::dismiss,
+            onDismiss = translationViewModel::dismissSheet,
         )
     }
 }

@@ -27,7 +27,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import ru.nikitagrgv.breader.R
 
-/** Actions for the selected text, shown at the top instead of the floating text toolbar. */
+/** Actions for the selected text, shown at the bottom instead of the floating text toolbar. */
 @Composable
 fun SelectionBar(
     onCopy: () -> Unit,
@@ -39,7 +39,7 @@ fun SelectionBar(
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
-                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
                 .padding(horizontal = 8.dp, vertical = 4.dp),
         ) {
             SelectionAction(R.drawable.ic_copy, R.string.copy, onCopy)

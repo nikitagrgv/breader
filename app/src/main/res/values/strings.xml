@@ -21,7 +21,7 @@
     <string name="reader_failed_hint">The file may have been moved or deleted.</string>
     <string name="open_library">Open library</string>
 
-    <string name="progress_percent">%1$d%%</string>
+    <string name="progress_percent">%1$.1f%%</string>
     <string name="book_position">Position in the book</string>
     <string name="copy">Copy</string>
     <string name="translate">Translate</string>
@@ -65,6 +65,18 @@
         <item quantity="other">%1$d words on each side</item>
     </plurals>
     <string name="context_words_summary">Text around the selection sent along with it, so the right meaning is picked.</string>
+    <string name="translation_cache">Cache</string>
+    <string name="translation_cache_off">Off</string>
+    <plurals name="translation_cache_value">
+        <item quantity="one">%1$d fragment</item>
+        <item quantity="other">%1$d fragments</item>
+    </plurals>
+    <string name="translation_cache_summary">Translations of the recently selected fragments are kept, so selecting one again shows them at once. A fragment with a different context or language is translated anew.</string>
+    <plurals name="translation_cache_used">
+        <item quantity="one">%1$d fragment saved</item>
+        <item quantity="other">%1$d fragments saved</item>
+    </plurals>
+    <string name="clear_cache">Clear cache</string>
 
     <string name="models_title">Translation models</string>
     <plurals name="models_selected">
@@ -96,6 +108,11 @@
     <plurals name="translation_waiting">
         <item quantity="one">Waiting for %2$s</item>
         <item quantity="other">Waiting for %1$d models: %2$s</item>
+    </plurals>
+    <string name="translation_progress">%1$d/%2$d</string>
+    <plurals name="translation_failed">
+        <item quantity="one">%1$d failed</item>
+        <item quantity="other">%1$d failed</item>
     </plurals>
     <string name="error_invalid_key">Invalid API key</string>
     <string name="error_no_credits">Not enough credits on the OpenRouter account</string>

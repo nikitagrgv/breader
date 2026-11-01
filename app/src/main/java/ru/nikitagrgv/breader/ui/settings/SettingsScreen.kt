@@ -60,6 +60,8 @@ fun SettingsScreen(
     onHyphenationChange: (Boolean) -> Unit,
     onSeekBarPositionChange: (SeekBarPosition) -> Unit,
     onTranslationChange: ((TranslationSettings) -> TranslationSettings) -> Unit,
+    cachedTranslations: Int,
+    onClearTranslationCache: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // Follows the slider while it's dragged; saved when the finger is lifted.
@@ -172,7 +174,7 @@ fun SettingsScreen(
         }
 
         SectionHeader(R.string.settings_translation)
-        TranslationSection(settings.translation, onTranslationChange)
+        TranslationSection(settings.translation, onTranslationChange, cachedTranslations, onClearTranslationCache)
     }
 }
 

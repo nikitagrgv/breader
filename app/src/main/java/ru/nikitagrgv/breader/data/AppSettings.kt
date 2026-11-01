@@ -44,6 +44,8 @@ data class TranslationSettings(
     val targetLanguage: String = "",
     /** How many words before and after the selection are sent along with it, so the models see the context. */
     val contextWords: Int = DEFAULT_CONTEXT_WORDS,
+    /** How many recently selected fragments keep their translations, so selecting one again needs no requests. */
+    val cacheSize: Int = DEFAULT_CACHE_SIZE,
 ) {
     val isConfigured: Boolean
         get() = apiKey.isNotBlank() && models.isNotEmpty()
@@ -55,6 +57,9 @@ data class TranslationSettings(
         const val DEFAULT_CONTEXT_WORDS = 30
         const val MAX_CONTEXT_WORDS = 100
         const val CONTEXT_WORDS_STEP = 5
+        const val DEFAULT_CACHE_SIZE = 20
+        const val MAX_CACHE_SIZE = 200
+        const val CACHE_SIZE_STEP = 10
 
         fun deviceLanguage(): String = Locale.getDefault().getDisplayLanguage(Locale.ENGLISH)
     }

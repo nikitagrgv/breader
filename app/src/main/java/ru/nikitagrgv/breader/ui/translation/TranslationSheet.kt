@@ -71,10 +71,11 @@ fun TranslationSheet(
 
 @Composable
 private fun Results(state: TranslationState, onRetry: (model: String) -> Unit) {
-    val done = state.results.mapNotNull { (model, result) -> (result as? ModelResult.Done)?.let { model to it.translation } }
+    // In the order of the settings, unlike the brief preview: equal translations are ranked by it.
+    val done = state.models.mapNotNull { model -> (state.results[model] as? ModelResult.Done)?.let { model to it.translation } }
     val combined = remember(done) { combine(done) }
-    val pending = state.results.filterValues { it == ModelResult.Loading }.keys
-    val failed = state.results.mapNotNull { (model, result) -> (result as? ModelResult.Failed)?.let { model to it.error } }
+    val pending = state.pending
+    val failed = state.models.mapNotNull { model -> (state.results[model] as? ModelResult.Failed)?.let { model to it.error } }
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         if (done.isNotEmpty()) {

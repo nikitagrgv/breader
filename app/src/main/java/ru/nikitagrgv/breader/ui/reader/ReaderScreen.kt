@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -69,6 +70,7 @@ import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -86,6 +88,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import ru.nikitagrgv.breader.R
@@ -95,11 +98,15 @@ import ru.nikitagrgv.breader.format.InlineStyle
 import ru.nikitagrgv.breader.format.Paragraph
 import ru.nikitagrgv.breader.format.ParagraphKind
 import ru.nikitagrgv.breader.translation.BookSelection
+import ru.nikitagrgv.breader.ui.translation.TranslationPreview
+import ru.nikitagrgv.breader.ui.translation.TranslationState
 import kotlin.math.roundToInt
 
 /**
  * @param chromeVisible whether the bars over the text are shown; they're hidden while reading.
  * @param contentPadding insets for everything except the book text, which uses the whole screen.
+ * @param translationPreview brief translations of the selected text, shown at the top; null to show none.
+ * @param onSelectionChange gets every change of the selection in the book; null when it's cleared.
  */
 @Composable
 fun ReaderScreen(
@@ -111,6 +118,8 @@ fun ReaderScreen(
     onToggleChrome: () -> Unit,
     onHideChrome: () -> Unit,
     onPositionChange: (bookId: String, position: ReadingPosition, progress: Float) -> Unit,
+    translationPreview: TranslationState?,
+    onSelectionChange: (BookSelection?) -> Unit,
     onTranslate: (BookSelection) -> Unit,
     onOpenLibrary: () -> Unit,
     modifier: Modifier = Modifier,
@@ -142,6 +151,8 @@ fun ReaderScreen(
                         onToggleChrome = onToggleChrome,
                         onHideChrome = onHideChrome,
                         onPositionChange = { position, progress -> onPositionChange(state.bookId, position, progress) },
+                        translationPreview = translationPreview,
+                        onSelectionChange = onSelectionChange,
                         onTranslate = onTranslate,
                     )
                 }
@@ -167,6 +178,8 @@ private fun BookText(
     onToggleChrome: () -> Unit,
     onHideChrome: () -> Unit,
     onPositionChange: (ReadingPosition, Float) -> Unit,
+    translationPreview: TranslationState?,
+    onSelectionChange: (BookSelection?) -> Unit,
     onTranslate: (BookSelection) -> Unit,
 ) {
     val paragraphs = state.content.paragraphs
@@ -190,6 +203,7 @@ private fun BookText(
     val currentOnToggleChrome by rememberUpdatedState(onToggleChrome)
     val currentOnHideChrome by rememberUpdatedState(onHideChrome)
     val currentOnPositionChange by rememberUpdatedState(onPositionChange)
+    val currentOnSelectionChange by rememberUpdatedState(onSelectionChange)
     fun savePosition() {
         val currentProgress = progress ?: return
         val position = ReadingPosition(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
@@ -216,6 +230,17 @@ private fun BookText(
     }
     DisposableEffect(listState) {
         onDispose { savePosition() }
+    }
+    // Every change is reported: whoever translates the selection waits for it to settle.
+    LaunchedEffect(selectionState, paragraphs) {
+        try {
+            snapshotFlow { selectionState.locate(paragraphs) }
+                .distinctUntilChangedBy { it?.start to it?.end }
+                .collect { currentOnSelectionChange(it) }
+        } finally {
+            // The selection goes away with the text, e.g. when another tab is opened.
+            currentOnSelectionChange(null)
+        }
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -276,11 +301,29 @@ private fun BookText(
             onSeekFinished = { seekFraction = null },
         )
 
+        // Over the top bar, which says nothing about the selection. Up to a third of the screen,
+        // so the selected text is likely to stay in sight.
+        val previewMaxHeight = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.height.toDp() } / 3
+        // Kept while the preview slides away, so it doesn't go blank.
+        val lastPreview = remember { LastValue<TranslationState>() }
+        if (translationPreview != null) lastPreview.value = translationPreview
         AnimatedVisibility(
-            visible = hasSelection,
+            visible = translationPreview != null,
             enter = fadeIn() + slideInVertically { -it },
             exit = fadeOut() + slideOutVertically { -it },
             modifier = Modifier.align(Alignment.TopCenter),
+        ) {
+            (translationPreview ?: lastPreview.value)?.let { TranslationPreview(it, Modifier.heightIn(max = previewMaxHeight)) }
+        }
+
+        // Above the navigation bar while it's shown; contentPadding has its height.
+        AnimatedVisibility(
+            visible = hasSelection,
+            enter = fadeIn() + slideInVertically { it },
+            exit = fadeOut() + slideOutVertically { it },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = contentPadding.calculateBottomPadding()),
         ) {
             SelectionBar(
                 onCopy = {
@@ -358,6 +401,11 @@ private fun BoxScope.SeekBarOverlay(
 }
 
 private const val MAX_BLANK_LINES = 2
+
+/** Not a state on purpose: it's only read while its value is gone, and setting it shouldn't recompose anything. */
+private class LastValue<T : Any> {
+    var value: T? = null
+}
 
 /** Selected parts of the paragraphs, one per line. */
 private fun SelectionState.selectedText(): String = selectedTexts.joinToString("\n") { it.text }
@@ -462,7 +510,7 @@ private fun ReaderTopBar(title: String, progress: Float?, modifier: Modifier = M
             )
             if (progress != null) {
                 Text(
-                    text = stringResource(R.string.progress_percent, (progress * 100).roundToInt()),
+                    text = stringResource(R.string.progress_percent, progress * 100),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 16.dp),

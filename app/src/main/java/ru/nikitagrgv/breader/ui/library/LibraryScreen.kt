@@ -36,7 +36,6 @@ import ru.nikitagrgv.breader.R
 import ru.nikitagrgv.breader.data.Book
 import ru.nikitagrgv.breader.data.Library
 import ru.nikitagrgv.breader.format.BookParser
-import kotlin.math.roundToInt
 
 /** Lives in the Scaffold's FAB slot, so snackbars push it up instead of covering it. */
 @Composable
@@ -108,7 +107,7 @@ private fun BookItem(
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     val progress = if (book.progress > 0f) {
-        stringResource(R.string.progress_percent, (book.progress * 100).roundToInt())
+        stringResource(R.string.progress_percent, book.progress * 100)
     } else {
         null
     }

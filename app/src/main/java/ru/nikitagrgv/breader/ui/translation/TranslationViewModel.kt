@@ -9,9 +9,12 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
@@ -21,12 +24,13 @@ import ru.nikitagrgv.breader.translation.Excerpt
 import ru.nikitagrgv.breader.translation.OpenRouter
 import ru.nikitagrgv.breader.translation.OpenRouterException
 import ru.nikitagrgv.breader.translation.Translation
+import ru.nikitagrgv.breader.translation.TranslationCache
+import ru.nikitagrgv.breader.translation.TranslationKey
 import ru.nikitagrgv.breader.translation.TranslationPrompt
 import java.io.IOException
 import java.net.SocketTimeoutException
 
 sealed interface ModelResult {
-    data object Loading : ModelResult
     data class Done(val translation: Translation) : ModelResult
     data class Failed(val error: TranslationError) : ModelResult
 }
@@ -40,42 +44,133 @@ data class TranslationState(
     val excerpt: Excerpt,
     /** False if there's no API key or no models to ask. */
     val configured: Boolean,
-    /** By model ID, in the order of the settings. */
+    /** The asked models, in the order of the settings. */
+    val models: List<String>,
+    /** Results by model, in the order they came; the models that have none yet are waited for. */
     val results: Map<String, ModelResult>,
-)
+) {
+    val pending: List<String>
+        get() = models.filter { it !in results }
+}
 
-/** Asks all the chosen models at once; each result is shown as soon as it comes. */
-class TranslationViewModel(private val openRouter: OpenRouter) : ViewModel() {
-    private val _state = MutableStateFlow<TranslationState?>(null)
+/**
+ * Translates the selected text: briefly while it's selected ([preview]) and in detail on request ([sheet]).
+ * Both show the same translation, so opening the sheet for the selection doesn't ask the models again.
+ * All the chosen models are asked at once; each result is shown as soon as it comes, and the successful
+ * ones are cached.
+ */
+class TranslationViewModel(private val openRouter: OpenRouter, private val cache: TranslationCache) : ViewModel() {
+    private val state = MutableStateFlow<TranslationState?>(null)
 
-    /** Null when nothing is being translated. */
-    val state: StateFlow<TranslationState?> = _state.asStateFlow()
+    /** Whether [state] is of the current selection. */
+    private val selected = MutableStateFlow(false)
+    private val sheetOpen = MutableStateFlow(false)
+
+    /** The translation of the selected text; null when nothing is selected or translation isn't set up. */
+    val preview: StateFlow<TranslationState?> = combine(state, selected) { state, selected ->
+        state?.takeIf { selected && it.configured }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** The translation shown in detail; null when it isn't asked for. */
+    val sheet: StateFlow<TranslationState?> = combine(state, sheetOpen) { state, open ->
+        state?.takeIf { open }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** The number of cached fragments. */
+    val cacheSize: StateFlow<Int> = cache.size
 
     private var settings = TranslationSettings()
+    private var key: TranslationKey? = null
 
     /** The parent of the current translation's requests. */
     private var requests: Job = Job()
 
-    fun translate(excerpt: Excerpt, settings: TranslationSettings) {
-        requests.cancel()
-        requests = SupervisorJob(viewModelScope.coroutineContext.job)
-        this.settings = settings
-        val models = if (settings.isConfigured) settings.models else emptyList()
-        _state.value = TranslationState(excerpt, settings.isConfigured, models.associateWith { ModelResult.Loading })
-        models.forEach(::request)
+    /** A selection that is waited on to settle, so that adjusting a selection doesn't ask the models every moment. */
+    private var pending: Pair<Excerpt, TranslationSettings>? = null
+    private var pendingJob: Job? = null
+
+    /**
+     * To be called on every change of the selection; [excerpt] is null when it's cleared. Until the new
+     * selection settles, the translation of the previous one stays.
+     */
+    fun select(excerpt: Excerpt?, settings: TranslationSettings) {
+        val selection = excerpt?.let { it to settings }
+        if (selection != null && selection == pending) return
+        cancelPending()
+        when {
+            excerpt == null -> {
+                selected.value = false
+                if (!sheetOpen.value) stop()
+            }
+            isCurrent(excerpt, settings) -> selected.value = true
+            else -> {
+                pending = selection
+                pendingJob = viewModelScope.launch {
+                    delay(SELECTION_DELAY_MS)
+                    pending = null
+                    start(excerpt, settings)
+                    selected.value = true
+                }
+            }
+        }
+    }
+
+    /** Shows the translation in detail; the one of the preview if it's of the same [excerpt]. */
+    fun openSheet(excerpt: Excerpt, settings: TranslationSettings) {
+        cancelPending()
+        if (!isCurrent(excerpt, settings)) start(excerpt, settings)
+        sheetOpen.value = true
+    }
+
+    fun dismissSheet() {
+        sheetOpen.value = false
+        if (!selected.value) stop()
     }
 
     fun retry(model: String) = request(model)
 
-    fun dismiss() {
+    fun clearCache() {
+        viewModelScope.launch { cache.clear() }
+    }
+
+    private fun isCurrent(excerpt: Excerpt, settings: TranslationSettings): Boolean =
+        state.value?.excerpt == excerpt && this.settings == settings
+
+    private fun cancelPending() {
+        pendingJob?.cancel()
+        pendingJob = null
+        pending = null
+    }
+
+    private fun start(excerpt: Excerpt, settings: TranslationSettings) {
+        stop()
+        requests = SupervisorJob(viewModelScope.coroutineContext.job)
+        this.settings = settings
+        val models = if (settings.isConfigured) settings.models else emptyList()
+        val key = TranslationKey(excerpt, settings.sourceLanguage, settings.effectiveTargetLanguage)
+        this.key = key
+        state.value = TranslationState(excerpt, settings.isConfigured, models, emptyMap())
+        if (models.isEmpty()) return
+        // The cache is ready long before anything is selected, so the cached results show at once.
+        viewModelScope.launch(requests) {
+            val cached = cache.get(key).filterKeys { it in models }
+            state.update { it?.copy(results = cached.mapValues { (_, translation) -> ModelResult.Done(translation) }) }
+            models.filter { it !in cached }.forEach(::request)
+        }
+    }
+
+    private fun stop() {
         requests.cancel()
-        _state.value = null
+        state.value = null
+        key = null
     }
 
     private fun request(model: String) {
-        val excerpt = _state.value?.excerpt ?: return
+        val excerpt = state.value?.excerpt ?: return
+        val key = key ?: return
         val settings = settings
-        setResult(model, ModelResult.Loading)
+        // Waited for again.
+        state.update { state -> state?.copy(results = state.results - model) }
         viewModelScope.launch(requests) {
             val language = settings.effectiveTargetLanguage
             val result = try {
@@ -95,20 +190,23 @@ class TranslationViewModel(private val openRouter: OpenRouter) : ViewModel() {
                 Log.w(TAG, "Translation by $model failed", e)
                 ModelResult.Failed(e.toTranslationError())
             }
-            setResult(model, result)
+            if (result is ModelResult.Done) cache.put(key, model, result.translation)
+            // Added to the end: the results stay in the order they came.
+            state.update { state -> state?.copy(results = state.results - model + (model to result)) }
         }
-    }
-
-    private fun setResult(model: String, result: ModelResult) {
-        // Replacing the value of an existing key keeps the order of the map.
-        _state.update { state -> state?.copy(results = state.results + (model to result)) }
     }
 
     companion object {
         private const val TAG = "TranslationViewModel"
 
+        /** How long the selection has to stay the same before the models are asked. */
+        private const val SELECTION_DELAY_MS = 500L
+
         val Factory = viewModelFactory {
-            initializer { TranslationViewModel((this[APPLICATION_KEY] as BreaderApplication).openRouter) }
+            initializer {
+                val app = this[APPLICATION_KEY] as BreaderApplication
+                TranslationViewModel(app.openRouter, app.translationCache)
+            }
         }
     }
 }
