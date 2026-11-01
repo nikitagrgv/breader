@@ -6,8 +6,6 @@
    See https://developer.android.com/about/versions/12/backup-restore
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <!-- Dictionaries can be downloaded again, and would take most of the 25 MB backup quota. -->
+    <exclude domain="file" path="dictionaries/" />
 </full-backup-content>

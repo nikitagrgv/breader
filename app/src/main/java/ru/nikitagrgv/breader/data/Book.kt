@@ -20,6 +20,8 @@ data class Book(
     val position: ReadingPosition = ReadingPosition(),
     /** Read fraction of the book, 0..1. */
     val progress: Float = 0f,
+    /** How long the book has been read: it was open in the reader and the app was in use. */
+    val readingTimeMs: Long = 0,
 )
 
 data class Library(

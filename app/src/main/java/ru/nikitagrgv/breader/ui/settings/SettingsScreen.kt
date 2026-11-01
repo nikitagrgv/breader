@@ -1,6 +1,7 @@
 package ru.nikitagrgv.breader.ui.settings
 
 import androidx.annotation.StringRes
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -29,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
@@ -62,6 +64,8 @@ fun SettingsScreen(
     onTranslationChange: ((TranslationSettings) -> TranslationSettings) -> Unit,
     cachedTranslations: Int,
     onClearTranslationCache: () -> Unit,
+    dictionaries: Int,
+    onOpenDictionaries: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // Follows the slider while it's dragged; saved when the finger is lifted.
@@ -175,6 +179,21 @@ fun SettingsScreen(
 
         SectionHeader(R.string.settings_translation)
         TranslationSection(settings.translation, onTranslationChange, cachedTranslations, onClearTranslationCache)
+
+        SectionHeader(R.string.dictionaries_title)
+        ListItem(
+            headlineContent = { Text(stringResource(R.string.manage_dictionaries)) },
+            supportingContent = {
+                Text(
+                    if (dictionaries == 0) {
+                        stringResource(R.string.dictionaries_summary_none)
+                    } else {
+                        pluralStringResource(R.plurals.dictionaries_summary, dictionaries, dictionaries)
+                    },
+                )
+            },
+            modifier = Modifier.clickable(onClick = onOpenDictionaries),
+        )
     }
 }
 

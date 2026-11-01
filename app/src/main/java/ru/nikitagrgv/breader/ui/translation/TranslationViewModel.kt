@@ -20,6 +20,8 @@ import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import ru.nikitagrgv.breader.BreaderApplication
 import ru.nikitagrgv.breader.data.TranslationSettings
+import ru.nikitagrgv.breader.dictionary.DictionaryRepository
+import ru.nikitagrgv.breader.dictionary.DictionaryResult
 import ru.nikitagrgv.breader.translation.Excerpt
 import ru.nikitagrgv.breader.translation.OpenRouter
 import ru.nikitagrgv.breader.translation.OpenRouterException
@@ -48,9 +50,19 @@ data class TranslationState(
     val models: List<String>,
     /** Results by model, in the order they came; the models that have none yet are waited for. */
     val results: Map<String, ModelResult>,
+    /** What the downloaded dictionaries have for the fragment. */
+    val dictionary: List<DictionaryResult> = emptyList(),
 ) {
     val pending: List<String>
         get() = models.filter { it !in results }
+
+    /** All the meanings from the dictionaries in one line; null if they have nothing. */
+    val dictionaryLine: String?
+        get() = dictionary
+            .flatMap { result -> result.entries.flatMap { entry -> entry.senses.map { it.gloss } } }
+            .distinct()
+            .joinToString("; ")
+            .ifEmpty { null }
 }
 
 /**
@@ -59,16 +71,23 @@ data class TranslationState(
  * All the chosen models are asked at once; each result is shown as soon as it comes, and the successful
  * ones are cached.
  */
-class TranslationViewModel(private val openRouter: OpenRouter, private val cache: TranslationCache) : ViewModel() {
+class TranslationViewModel(
+    private val openRouter: OpenRouter,
+    private val cache: TranslationCache,
+    private val dictionaries: DictionaryRepository,
+) : ViewModel() {
     private val state = MutableStateFlow<TranslationState?>(null)
 
     /** Whether [state] is of the current selection. */
     private val selected = MutableStateFlow(false)
     private val sheetOpen = MutableStateFlow(false)
 
-    /** The translation of the selected text; null when nothing is selected or translation isn't set up. */
+    /**
+     * The translation of the selected text; null when nothing is selected, or when there's nothing to show:
+     * translation isn't set up and the dictionaries have nothing.
+     */
     val preview: StateFlow<TranslationState?> = combine(state, selected) { state, selected ->
-        state?.takeIf { selected && it.configured }
+        state?.takeIf { selected && (it.configured || it.dictionary.isNotEmpty()) }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     /** The translation shown in detail; null when it isn't asked for. */
@@ -150,6 +169,10 @@ class TranslationViewModel(private val openRouter: OpenRouter, private val cache
         val key = TranslationKey(excerpt, settings.sourceLanguage, settings.effectiveTargetLanguage)
         this.key = key
         state.value = TranslationState(excerpt, settings.isConfigured, models, emptyMap())
+        viewModelScope.launch(requests) {
+            val found = dictionaries.lookup(excerpt.fragment)
+            if (found.isNotEmpty()) state.update { it?.copy(dictionary = found) }
+        }
         if (models.isEmpty()) return
         // The cache is ready long before anything is selected, so the cached results show at once.
         viewModelScope.launch(requests) {
@@ -205,7 +228,7 @@ class TranslationViewModel(private val openRouter: OpenRouter, private val cache
         val Factory = viewModelFactory {
             initializer {
                 val app = this[APPLICATION_KEY] as BreaderApplication
-                TranslationViewModel(app.openRouter, app.translationCache)
+                TranslationViewModel(app.openRouter, app.translationCache, app.dictionaryRepository)
             }
         }
     }

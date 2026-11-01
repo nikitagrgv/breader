@@ -114,6 +114,8 @@ class MainViewModel(
     fun savePosition(bookId: String, position: ReadingPosition, progress: Float) =
         repository.updatePosition(bookId, position, progress)
 
+    fun addReadingTime(bookId: String, ms: Long) = repository.addReadingTime(bookId, ms)
+
     fun setTheme(theme: AppTheme) {
         viewModelScope.launch { settingsRepository.setTheme(theme) }
     }

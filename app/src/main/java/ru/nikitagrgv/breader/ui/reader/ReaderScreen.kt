@@ -107,6 +107,8 @@ import kotlin.math.roundToInt
  * @param contentPadding insets for everything except the book text, which uses the whole screen.
  * @param translationPreview brief translations of the selected text, shown at the top; null to show none.
  * @param onSelectionChange gets every change of the selection in the book; null when it's cleared.
+ * @param readingTimeMs how long the open book has been read, for the top bar.
+ * @param onReadingTime gets the time the book is read for, in parts, while the reader is shown in the resumed app.
  */
 @Composable
 fun ReaderScreen(
@@ -118,9 +120,12 @@ fun ReaderScreen(
     onToggleChrome: () -> Unit,
     onHideChrome: () -> Unit,
     onPositionChange: (bookId: String, position: ReadingPosition, progress: Float) -> Unit,
+    readingTimeMs: Long,
+    onReadingTime: (bookId: String, ms: Long) -> Unit,
     translationPreview: TranslationState?,
     onSelectionChange: (BookSelection?) -> Unit,
     onTranslate: (BookSelection) -> Unit,
+    onLookUp: (BookSelection) -> Unit,
     onOpenLibrary: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -151,9 +156,12 @@ fun ReaderScreen(
                         onToggleChrome = onToggleChrome,
                         onHideChrome = onHideChrome,
                         onPositionChange = { position, progress -> onPositionChange(state.bookId, position, progress) },
+                        readingTimeMs = readingTimeMs,
+                        onReadingTime = { onReadingTime(state.bookId, it) },
                         translationPreview = translationPreview,
                         onSelectionChange = onSelectionChange,
                         onTranslate = onTranslate,
+                        onLookUp = onLookUp,
                     )
                 }
             }
@@ -178,9 +186,12 @@ private fun BookText(
     onToggleChrome: () -> Unit,
     onHideChrome: () -> Unit,
     onPositionChange: (ReadingPosition, Float) -> Unit,
+    readingTimeMs: Long,
+    onReadingTime: (Long) -> Unit,
     translationPreview: TranslationState?,
     onSelectionChange: (BookSelection?) -> Unit,
     onTranslate: (BookSelection) -> Unit,
+    onLookUp: (BookSelection) -> Unit,
 ) {
     val paragraphs = state.content.paragraphs
     val looks = rememberParagraphLooks(settings)
@@ -209,6 +220,8 @@ private fun BookText(
         val position = ReadingPosition(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
         currentOnPositionChange(position, currentProgress)
     }
+
+    ReadingTimeTracker(onReadingTime)
 
     // The bars only get in the way while reading, so they're hidden once the user drags the text
     // (jumps made with the seek bar don't count).
@@ -287,6 +300,7 @@ private fun BookText(
             ReaderTopBar(
                 title = state.title,
                 progress = progress,
+                readingTimeMs = readingTimeMs,
                 modifier = Modifier.onSizeChanged { topBarHeight = it.height },
             )
         }
@@ -337,6 +351,10 @@ private fun BookText(
                 },
                 onTranslate = {
                     selectionState.locate(paragraphs)?.let(onTranslate)
+                    selectionState.clear()
+                },
+                onLookUp = {
+                    selectionState.locate(paragraphs)?.let(onLookUp)
                     selectionState.clear()
                 },
                 onClear = selectionState::clear,
@@ -493,7 +511,7 @@ private fun rememberParagraphLooks(settings: ReaderSettings): Map<ParagraphKind,
 }
 
 @Composable
-private fun ReaderTopBar(title: String, progress: Float?, modifier: Modifier = Modifier) {
+private fun ReaderTopBar(title: String, progress: Float?, readingTimeMs: Long, modifier: Modifier = Modifier) {
     Surface(color = MaterialTheme.colorScheme.surfaceContainer, modifier = modifier.fillMaxWidth()) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -509,8 +527,9 @@ private fun ReaderTopBar(title: String, progress: Float?, modifier: Modifier = M
                 modifier = Modifier.weight(1f),
             )
             if (progress != null) {
+                val percent = stringResource(R.string.progress_percent, progress * 100)
                 Text(
-                    text = stringResource(R.string.progress_percent, progress * 100),
+                    text = listOfNotNull(percent, formatReadingTime(readingTimeMs)).joinToString(" · "),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 16.dp),

@@ -151,7 +151,7 @@ class OpenRouter {
  * Runs the blocking [block] on the IO dispatcher. Blocking reads ignore coroutine cancellation,
  * so on cancellation the connection is closed to abort them, instead of waiting for the timeout.
  */
-private suspend fun <T> HttpURLConnection.abortOnCancel(block: HttpURLConnection.() -> T): T = coroutineScope {
+internal suspend fun <T> HttpURLConnection.abortOnCancel(block: HttpURLConnection.() -> T): T = coroutineScope {
     // Undispatched, so the finally block is guaranteed to run even if cancelled right away.
     val aborter = launch(Dispatchers.IO, start = CoroutineStart.UNDISPATCHED) {
         try {

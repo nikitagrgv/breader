@@ -39,10 +39,15 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 import ru.nikitagrgv.breader.R
 import ru.nikitagrgv.breader.data.AppSettings
+import ru.nikitagrgv.breader.dictionary.Kaikki
+import ru.nikitagrgv.breader.ui.dictionary.DictionaryManagerDialog
+import ru.nikitagrgv.breader.ui.dictionary.DictionarySheet
+import ru.nikitagrgv.breader.ui.dictionary.DictionaryViewModel
 import ru.nikitagrgv.breader.ui.library.AddBooksButton
 import ru.nikitagrgv.breader.ui.library.LibraryScreen
 import ru.nikitagrgv.breader.ui.reader.ReaderScreen
 import ru.nikitagrgv.breader.ui.reader.ReaderState
+import ru.nikitagrgv.breader.ui.reader.bookId
 import ru.nikitagrgv.breader.ui.reader.toReaderSettings
 import ru.nikitagrgv.breader.ui.settings.SettingsScreen
 import ru.nikitagrgv.breader.ui.translation.TranslationSheet
@@ -60,7 +65,12 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
     val translation by translationViewModel.sheet.collectAsStateWithLifecycle()
     val translationPreview by translationViewModel.preview.collectAsStateWithLifecycle()
     val cachedTranslations by translationViewModel.cacheSize.collectAsStateWithLifecycle()
+    val dictionaryViewModel: DictionaryViewModel = viewModel(factory = DictionaryViewModel.Factory)
+    val dictionaryLookup by dictionaryViewModel.lookup.collectAsStateWithLifecycle()
+    val dictionaries by dictionaryViewModel.installed.collectAsStateWithLifecycle()
+    var managingDictionaries by rememberSaveable { mutableStateOf(false) }
     val readerState by viewModel.reader.collectAsStateWithLifecycle()
+    val library by viewModel.library.collectAsStateWithLifecycle()
     val readerSettings = remember(settings) { settings.toReaderSettings() }
     var tab by rememberSaveable { mutableStateOf(MainTab.LIBRARY) }
     var readerChromeVisible by rememberSaveable { mutableStateOf(true) }
@@ -105,19 +115,16 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
     ) { innerPadding ->
         tabStates.SaveableStateProvider(tab.name) {
             when (tab) {
-                MainTab.LIBRARY -> {
-                    val library by viewModel.library.collectAsStateWithLifecycle()
-                    LibraryScreen(
-                        library = library,
-                        contentPadding = innerPadding,
-                        onOpenBook = { book ->
-                            viewModel.openBook(book)
-                            readerChromeVisible = false
-                            tab = MainTab.READER
-                        },
-                        onRemoveBook = viewModel::removeBook,
-                    )
-                }
+                MainTab.LIBRARY -> LibraryScreen(
+                    library = library,
+                    contentPadding = innerPadding,
+                    onOpenBook = { book ->
+                        viewModel.openBook(book)
+                        readerChromeVisible = false
+                        tab = MainTab.READER
+                    },
+                    onRemoveBook = viewModel::removeBook,
+                )
                 // The book text ignores innerPadding: the bars are drawn over it, so showing them doesn't move the text.
                 MainTab.READER -> ReaderScreen(
                     state = readerState,
@@ -128,6 +135,8 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
                     onToggleChrome = { readerChromeVisible = !readerChromeVisible },
                     onHideChrome = { readerChromeVisible = false },
                     onPositionChange = viewModel::savePosition,
+                    readingTimeMs = library?.books?.find { it.id == readerState.bookId }?.readingTimeMs ?: 0,
+                    onReadingTime = viewModel::addReadingTime,
                     translationPreview = translationPreview,
                     onSelectionChange = { selection ->
                         translationViewModel.select(
@@ -141,6 +150,7 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
                             settings = settings.translation,
                         )
                     },
+                    onLookUp = { selection -> dictionaryViewModel.lookUp(selection.excerpt(contextWords = 0).fragment) },
                     onOpenLibrary = { tab = MainTab.LIBRARY },
                 )
                 MainTab.SETTINGS -> SettingsScreen(
@@ -154,6 +164,8 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
                     onTranslationChange = viewModel::updateTranslationSettings,
                     cachedTranslations = cachedTranslations,
                     onClearTranslationCache = translationViewModel::clearCache,
+                    dictionaries = dictionaries.size,
+                    onOpenDictionaries = { managingDictionaries = true },
                 )
             }
         }
@@ -168,6 +180,28 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
                 tab = MainTab.SETTINGS
             },
             onDismiss = translationViewModel::dismissSheet,
+        )
+    }
+
+    dictionaryLookup?.let { lookup ->
+        DictionarySheet(
+            lookup = lookup,
+            hasDictionaries = dictionaries.isNotEmpty(),
+            onOpenDictionaries = {
+                dictionaryViewModel.dismissLookup()
+                managingDictionaries = true
+            },
+            onDismiss = dictionaryViewModel::dismissLookup,
+        )
+    }
+
+    if (managingDictionaries) {
+        DictionaryManagerDialog(
+            // The words are best explained in the language they're translated into.
+            defaultEdition = Kaikki.editions.find { it.name.equals(settings.translation.effectiveTargetLanguage, ignoreCase = true) }
+                ?: Kaikki.editions.first(),
+            viewModel = dictionaryViewModel,
+            onDismiss = { managingDictionaries = false },
         )
     }
 }

@@ -32,6 +32,7 @@ import ru.nikitagrgv.breader.R
 fun SelectionBar(
     onCopy: () -> Unit,
     onTranslate: () -> Unit,
+    onLookUp: () -> Unit,
     onClear: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -42,8 +43,11 @@ fun SelectionBar(
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
                 .padding(horizontal = 8.dp, vertical = 4.dp),
         ) {
-            SelectionAction(R.drawable.ic_copy, R.string.copy, onCopy)
+            IconButton(onClick = onCopy) {
+                Icon(painterResource(R.drawable.ic_copy), contentDescription = stringResource(R.string.copy))
+            }
             SelectionAction(R.drawable.ic_translate, R.string.translate, onTranslate)
+            SelectionAction(R.drawable.ic_dictionary, R.string.dictionary, onLookUp)
             Spacer(Modifier.weight(1f))
             IconButton(onClick = onClear) {
                 Icon(painterResource(R.drawable.ic_close), contentDescription = stringResource(R.string.clear_selection))

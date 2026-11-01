@@ -36,6 +36,7 @@ import ru.nikitagrgv.breader.R
 import ru.nikitagrgv.breader.data.Book
 import ru.nikitagrgv.breader.data.Library
 import ru.nikitagrgv.breader.format.BookParser
+import ru.nikitagrgv.breader.ui.reader.formatReadingTime
 
 /** Lives in the Scaffold's FAB slot, so snackbars push it up instead of covering it. */
 @Composable
@@ -115,7 +116,8 @@ private fun BookItem(
         headlineContent = { Text(book.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
         supportingContent = {
             Text(
-                text = listOfNotNull(book.author, book.format.name, progress).joinToString(" · "),
+                text = listOfNotNull(book.author, book.format.name, progress, formatReadingTime(book.readingTimeMs))
+                    .joinToString(" · "),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )

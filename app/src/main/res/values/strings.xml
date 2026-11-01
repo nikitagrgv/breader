@@ -25,6 +25,8 @@
     <string name="book_position">Position in the book</string>
     <string name="copy">Copy</string>
     <string name="translate">Translate</string>
+    <string name="dictionary">Dictionary</string>
+    <string name="from_dictionary">From the dictionary</string>
     <string name="copied">Copied</string>
     <string name="clear_selection">Clear selection</string>
 
@@ -121,4 +123,44 @@
     <string name="error_network">No connection</string>
     <string name="error_bad_reply">The reply has no translation</string>
     <string name="error_unknown">Unknown error</string>
+
+    <string name="dictionaries_title">Dictionaries</string>
+    <string name="manage_dictionaries">Manage dictionaries</string>
+    <string name="dictionaries_summary_none">None downloaded. Download dictionaries to look up words offline.</string>
+    <plurals name="dictionaries_summary">
+        <item quantity="one">%1$d downloaded</item>
+        <item quantity="other">%1$d downloaded</item>
+    </plurals>
+    <string name="dictionaries_downloaded">Downloaded</string>
+    <string name="dictionaries_available">Download</string>
+    <string name="dictionaries_edition_summary">Pick the language the words are explained in, then the language of the words.</string>
+    <string name="dictionary_edition">%1$s Wiktionary</string>
+    <string name="dictionaries_search">Search languages</string>
+    <string name="dictionaries_languages_failed">Couldn\'t load the languages. Check the connection.</string>
+    <string name="dictionaries_languages_empty">No languages match.</string>
+    <string name="dictionaries_attribution">The dictionaries are made from Wiktionary by kaikki.org and are available under the CC BY-SA 4.0 license.</string>
+    <plurals name="dictionary_senses">
+        <item quantity="one">%1$s meaning</item>
+        <item quantity="other">%1$s meanings</item>
+    </plurals>
+    <plurals name="dictionary_words">
+        <item quantity="one">%1$s word</item>
+        <item quantity="other">%1$s words</item>
+    </plurals>
+    <string name="dictionary_info">%1$s Wiktionary · %2$s · %3$s</string>
+    <string name="dictionary_download">Download</string>
+    <string name="dictionary_remove">Remove</string>
+    <string name="cancel">Cancel</string>
+    <string name="dictionary_downloading">Downloading: %1$s of %2$s</string>
+    <string name="dictionary_downloading_unknown">Downloading: %1$s</string>
+    <string name="dictionary_downloading_edition">This language isn\'t available separately, so the whole Wiktionary is downloaded: %1$s of %2$s</string>
+    <string name="dictionary_indexing">Finishing…</string>
+    <string name="dictionary_error_network">Couldn\'t download. Check the connection.</string>
+    <string name="dictionary_error_not_found">Not available for download anymore.</string>
+    <string name="dictionary_error_empty">The download has no words in this language.</string>
+    <string name="dictionary_error_too_big">This language isn\'t available separately, and the whole Wiktionary is too big to download.</string>
+    <string name="dictionary_error_other">Couldn\'t make the dictionary.</string>
+    <string name="dictionary_source">%1$s · %2$s Wiktionary</string>
+    <string name="dictionary_nothing_found">The dictionaries have nothing for it.</string>
+    <string name="dictionary_none_downloaded">No dictionaries are downloaded.</string>
 </resources>

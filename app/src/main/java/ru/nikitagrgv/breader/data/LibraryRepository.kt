@@ -88,6 +88,15 @@ class LibraryRepository(context: Context) {
             })
         }
 
+    fun addReadingTime(id: String, ms: Long) {
+        if (ms <= 0) return
+        mutate(saveDelayMs = 1_000) { library ->
+            library.copy(books = library.books.map {
+                if (it.id == id) it.copy(readingTimeMs = it.readingTimeMs + ms) else it
+            })
+        }
+    }
+
     private fun mutate(saveDelayMs: Long = 0, transform: (Library) -> Library) {
         val current = _library.value ?: return
         val updated = transform(current)
@@ -160,6 +169,7 @@ class LibraryRepository(context: Context) {
         .put("paragraph", position.paragraph)
         .put("offset", position.offset)
         .put("progress", progress.toDouble())
+        .put("readingTime", readingTimeMs)
 
     private fun JSONObject.toBook() = Book(
         id = getString("id"),
@@ -171,6 +181,7 @@ class LibraryRepository(context: Context) {
         addedAt = getLong("addedAt"),
         position = ReadingPosition(optInt("paragraph"), optInt("offset")),
         progress = optDouble("progress", 0.0).toFloat(),
+        readingTimeMs = optLong("readingTime"),
     )
 
     private companion object {
