@@ -287,6 +287,13 @@ private fun BookText(
         selectionState.locate(paragraphs)?.let { currentOnSelectionChange(it) }
     }
 
+    // Lines much longer than 70 characters are hard to follow back to the start of the next one, so on wide
+    // screens (tablets, landscape) the text keeps to a column in the middle. Phones are narrower than that.
+    val density = LocalDensity.current
+    val windowWidth = with(density) { LocalWindowInfo.current.containerSize.width.toDp() }
+    val maxTextWidth = with(density) { settings.fontSize.toDp() } * MAX_LINE_EMS
+    val sideMargin = maxOf(settings.margins, (windowWidth - maxTextWidth) / 2)
+
     Box(Modifier.fillMaxSize()) {
         CompositionLocalProvider(LocalTextContextMenuToolbarProvider provides NoTextContextMenu) {
             SelectionContainer(state = selectionState, modifier = Modifier.fillMaxSize()) {
@@ -294,7 +301,7 @@ private fun BookText(
                     state = listState,
                     // Only the camera cutout is avoided: the system bars are hidden while reading.
                     contentPadding = WindowInsets.displayCutout
-                        .add(WindowInsets(settings.pagePadding, settings.pagePadding, settings.pagePadding, settings.pagePadding))
+                        .add(WindowInsets(left = sideMargin, top = TEXT_VERTICAL_PADDING, right = sideMargin, bottom = TEXT_VERTICAL_PADDING))
                         .asPaddingValues(),
                     modifier = Modifier
                         .fillMaxSize()
@@ -462,6 +469,10 @@ private fun BoxScope.SeekBarOverlay(
 
 private const val MAX_BLANK_LINES = 2
 
+/** About 70 characters: an average character with the spaces is half the font size wide. */
+private const val MAX_LINE_EMS = 35f
+private val TEXT_VERTICAL_PADDING = 12.dp
+
 /** Not a state on purpose: it's only read while its value is gone, and setting it shouldn't recompose anything. */
 private class LastValue<T : Any> {
     var value: T? = null
@@ -523,6 +534,7 @@ private fun rememberParagraphLooks(settings: ReaderSettings): Map<ParagraphKind,
         val body = TextStyle(
             color = color,
             fontSize = settings.fontSize,
+            fontFamily = settings.fontFamily,
             lineHeight = settings.lineHeight.em,
             textAlign = if (settings.justify) TextAlign.Justify else TextAlign.Start,
             textIndent = TextIndent(firstLine = 1.5.em),

@@ -10,7 +10,6 @@ import androidx.activity.viewModels
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import ru.nikitagrgv.breader.data.AppTheme
 import ru.nikitagrgv.breader.ui.MainScreen
 import ru.nikitagrgv.breader.ui.MainViewModel
 import ru.nikitagrgv.breader.ui.theme.BreaderTheme
@@ -25,7 +24,7 @@ class MainActivity : ComponentActivity() {
             // Nothing is drawn until the settings are loaded (a few ms), so the wrong theme never flashes.
             val settings by viewModel.settings.collectAsStateWithLifecycle()
             settings?.let { current ->
-                val darkTheme = current.theme == AppTheme.DARK
+                val darkTheme = current.theme.isDark
                 // The app theme doesn't follow the system one, so the bar icon colors are set explicitly.
                 DisposableEffect(darkTheme) {
                     enableEdgeToEdge(
@@ -34,7 +33,7 @@ class MainActivity : ComponentActivity() {
                     )
                     onDispose {}
                 }
-                BreaderTheme(darkTheme = darkTheme) {
+                BreaderTheme(theme = current.theme) {
                     MainScreen(viewModel, current)
                 }
             }

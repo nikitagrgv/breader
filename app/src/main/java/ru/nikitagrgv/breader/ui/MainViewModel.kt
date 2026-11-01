@@ -26,6 +26,7 @@ import ru.nikitagrgv.breader.data.Book
 import ru.nikitagrgv.breader.data.BookFiles
 import ru.nikitagrgv.breader.data.Library
 import ru.nikitagrgv.breader.data.LibraryRepository
+import ru.nikitagrgv.breader.data.ReaderFont
 import ru.nikitagrgv.breader.data.ReadingPosition
 import ru.nikitagrgv.breader.data.SeekBarPosition
 import ru.nikitagrgv.breader.data.SettingsRepository
@@ -122,6 +123,18 @@ class MainViewModel(
 
     fun setFontSize(size: Float) {
         viewModelScope.launch { settingsRepository.setFontSize(size) }
+    }
+
+    fun setFont(font: ReaderFont) {
+        viewModelScope.launch { settingsRepository.setFont(font) }
+    }
+
+    fun setLineSpacing(spacing: Float) {
+        viewModelScope.launch { settingsRepository.setLineSpacing(spacing) }
+    }
+
+    fun setMargins(margins: Int) {
+        viewModelScope.launch { settingsRepository.setMargins(margins) }
     }
 
     fun setJustify(enabled: Boolean) {

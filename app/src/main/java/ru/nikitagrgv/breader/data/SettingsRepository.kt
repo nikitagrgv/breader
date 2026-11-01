@@ -30,6 +30,9 @@ class SettingsRepository(context: Context) {
             AppSettings(
                 theme = prefs[THEME]?.let { name -> AppTheme.entries.find { it.name == name } } ?: defaults.theme,
                 fontSize = prefs[FONT_SIZE] ?: defaults.fontSize,
+                font = prefs[READER_FONT]?.let { name -> ReaderFont.entries.find { it.name == name } } ?: defaults.font,
+                lineSpacing = prefs[LINE_SPACING] ?: defaults.lineSpacing,
+                margins = prefs[MARGINS] ?: defaults.margins,
                 justify = prefs[JUSTIFY] ?: defaults.justify,
                 hyphenation = prefs[HYPHENATION] ?: defaults.hyphenation,
                 seekBarPosition = prefs[SEEK_BAR_POSITION]
@@ -46,6 +49,18 @@ class SettingsRepository(context: Context) {
 
     suspend fun setFontSize(size: Float) {
         dataStore.edit { it[FONT_SIZE] = size.coerceIn(AppSettings.MIN_FONT_SIZE, AppSettings.MAX_FONT_SIZE) }
+    }
+
+    suspend fun setFont(font: ReaderFont) {
+        dataStore.edit { it[READER_FONT] = font.name }
+    }
+
+    suspend fun setLineSpacing(spacing: Float) {
+        dataStore.edit { it[LINE_SPACING] = spacing.coerceIn(AppSettings.MIN_LINE_SPACING, AppSettings.MAX_LINE_SPACING) }
+    }
+
+    suspend fun setMargins(margins: Int) {
+        dataStore.edit { it[MARGINS] = margins.coerceIn(0, AppSettings.MAX_MARGINS) }
     }
 
     suspend fun setJustify(enabled: Boolean) {
@@ -96,6 +111,9 @@ class SettingsRepository(context: Context) {
     private companion object {
         val THEME = stringPreferencesKey("theme")
         val FONT_SIZE = floatPreferencesKey("font_size")
+        val READER_FONT = stringPreferencesKey("reader_font")
+        val LINE_SPACING = floatPreferencesKey("line_spacing")
+        val MARGINS = intPreferencesKey("margins")
         val JUSTIFY = booleanPreferencesKey("justify")
         val HYPHENATION = booleanPreferencesKey("hyphenation")
         val SEEK_BAR_POSITION = stringPreferencesKey("seek_bar_position")

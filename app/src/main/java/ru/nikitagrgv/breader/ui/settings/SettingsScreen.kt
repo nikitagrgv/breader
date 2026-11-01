@@ -2,7 +2,9 @@ package ru.nikitagrgv.breader.ui.settings
 
 import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,6 +15,7 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
@@ -34,16 +37,32 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import ru.nikitagrgv.breader.R
 import ru.nikitagrgv.breader.data.AppSettings
 import ru.nikitagrgv.breader.data.AppTheme
+import ru.nikitagrgv.breader.data.ReaderFont
 import ru.nikitagrgv.breader.data.SeekBarPosition
 import ru.nikitagrgv.breader.data.TranslationSettings
 import ru.nikitagrgv.breader.ui.reader.ReaderTextPreview
+import ru.nikitagrgv.breader.ui.reader.fontFamily
 import ru.nikitagrgv.breader.ui.reader.toReaderSettings
 import kotlin.math.roundToInt
 
-private val THEMES = listOf(AppTheme.DARK to R.string.theme_dark, AppTheme.LIGHT to R.string.theme_light)
+private val THEMES = listOf(
+    AppTheme.DARK to R.string.theme_dark,
+    AppTheme.BLACK to R.string.theme_black,
+    AppTheme.LIGHT to R.string.theme_light,
+    AppTheme.SEPIA to R.string.theme_sepia,
+)
+
+/** Pairs of a font's name and what it's good for. */
+private val FONTS = mapOf(
+    ReaderFont.SANS to (R.string.font_sans to R.string.font_sans_summary),
+    ReaderFont.SERIF to (R.string.font_serif to R.string.font_serif_summary),
+    ReaderFont.LITERATA to (R.string.font_literata to R.string.font_literata_summary),
+    ReaderFont.ATKINSON to (R.string.font_atkinson to R.string.font_atkinson_summary),
+)
 
 private val SEEK_BAR_POSITIONS = listOf(
     SeekBarPosition.LEFT to R.string.position_left,
@@ -58,6 +77,9 @@ fun SettingsScreen(
     contentPadding: PaddingValues,
     onThemeChange: (AppTheme) -> Unit,
     onFontSizeChange: (Float) -> Unit,
+    onFontChange: (ReaderFont) -> Unit,
+    onLineSpacingChange: (Float) -> Unit,
+    onMarginsChange: (Int) -> Unit,
     onJustifyChange: (Boolean) -> Unit,
     onHyphenationChange: (Boolean) -> Unit,
     onSeekBarPositionChange: (SeekBarPosition) -> Unit,
@@ -68,8 +90,10 @@ fun SettingsScreen(
     onOpenDictionaries: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // Follows the slider while it's dragged; saved when the finger is lifted.
+    // Follow the sliders while they're dragged; saved when the finger is lifted.
     var fontSize by remember(settings.fontSize) { mutableFloatStateOf(settings.fontSize) }
+    var lineSpacing by remember(settings.lineSpacing) { mutableFloatStateOf(settings.lineSpacing) }
+    var margins by remember(settings.margins) { mutableFloatStateOf(settings.margins.toFloat()) }
 
     Column(
         modifier
@@ -97,27 +121,54 @@ fun SettingsScreen(
 
         SectionHeader(R.string.settings_text)
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = stringResource(R.string.font_size),
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.weight(1f),
-                )
-                Text(
-                    text = stringResource(R.string.font_size_value, fontSize.roundToInt()),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            Text(stringResource(R.string.font), style = MaterialTheme.typography.bodyLarge)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for ((font, texts) in FONTS) {
+                    FilterChip(
+                        selected = settings.font == font,
+                        onClick = { onFontChange(font) },
+                        // In its own font, so the choice can be seen.
+                        label = { Text(stringResource(texts.first), fontFamily = font.fontFamily(14.sp)) },
+                    )
+                }
             }
-            Slider(
-                value = fontSize,
-                onValueChange = { fontSize = it },
-                onValueChangeFinished = { onFontSizeChange(fontSize) },
-                valueRange = AppSettings.MIN_FONT_SIZE..AppSettings.MAX_FONT_SIZE,
-                // One step per sp.
-                steps = (AppSettings.MAX_FONT_SIZE - AppSettings.MIN_FONT_SIZE).toInt() - 1,
+            Text(
+                text = stringResource(FONTS.getValue(settings.font).second),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+        SliderSetting(
+            title = R.string.font_size,
+            value = stringResource(R.string.font_size_value, fontSize.roundToInt()),
+            position = fontSize,
+            onPositionChange = { fontSize = it },
+            onPositionChangeFinished = { onFontSizeChange(fontSize) },
+            range = AppSettings.MIN_FONT_SIZE..AppSettings.MAX_FONT_SIZE,
+            // One step per sp.
+            steps = (AppSettings.MAX_FONT_SIZE - AppSettings.MIN_FONT_SIZE).toInt() - 1,
+        )
+        SliderSetting(
+            title = R.string.line_spacing,
+            summary = R.string.line_spacing_summary,
+            value = stringResource(R.string.line_spacing_value, lineSpacing),
+            position = lineSpacing,
+            onPositionChange = { lineSpacing = it },
+            onPositionChangeFinished = { onLineSpacingChange((lineSpacing * 10).roundToInt() / 10f) },
+            range = AppSettings.MIN_LINE_SPACING..AppSettings.MAX_LINE_SPACING,
+            // One step per 0.1.
+            steps = ((AppSettings.MAX_LINE_SPACING - AppSettings.MIN_LINE_SPACING) * 10).roundToInt() - 1,
+        )
+        SliderSetting(
+            title = R.string.margins,
+            summary = R.string.margins_summary,
+            value = stringResource(R.string.margins_value, margins.roundToInt()),
+            position = margins,
+            onPositionChange = { margins = it },
+            onPositionChangeFinished = { onMarginsChange(margins.roundToInt()) },
+            range = 0f..AppSettings.MAX_MARGINS.toFloat(),
+            steps = AppSettings.MAX_MARGINS / AppSettings.MARGINS_STEP - 1,
+        )
         ListItem(
             headlineContent = { Text(stringResource(R.string.justify)) },
             supportingContent = { Text(stringResource(R.string.justify_summary)) },
@@ -150,8 +201,8 @@ fun SettingsScreen(
         ) {
             ReaderTextPreview(
                 text = stringResource(R.string.text_preview),
-                settings = settings.copy(fontSize = fontSize).toReaderSettings(),
-                modifier = Modifier.padding(12.dp),
+                settings = settings.copy(fontSize = fontSize, lineSpacing = lineSpacing).toReaderSettings(),
+                modifier = Modifier.padding(horizontal = margins.dp, vertical = 12.dp),
             )
         }
 
@@ -193,6 +244,48 @@ fun SettingsScreen(
                 )
             },
             modifier = Modifier.clickable(onClick = onOpenDictionaries),
+        )
+    }
+}
+
+/** A setting set with a slider: its [title] and [value] above, the [summary] under them. */
+@Composable
+private fun SliderSetting(
+    @StringRes title: Int,
+    value: String,
+    position: Float,
+    onPositionChange: (Float) -> Unit,
+    onPositionChangeFinished: () -> Unit,
+    range: ClosedFloatingPointRange<Float>,
+    steps: Int,
+    @StringRes summary: Int? = null,
+) {
+    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = stringResource(title),
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (summary != null) {
+            Text(
+                text = stringResource(summary),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Slider(
+            value = position,
+            onValueChange = onPositionChange,
+            onValueChangeFinished = onPositionChangeFinished,
+            valueRange = range,
+            steps = steps,
         )
     }
 }
