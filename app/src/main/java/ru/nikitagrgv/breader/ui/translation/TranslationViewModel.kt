@@ -46,12 +46,14 @@ data class TranslationState(
     val excerpt: Excerpt,
     /** False if there's no API key or no models to ask. */
     val configured: Boolean,
-    /** The asked models, in the order of the settings. */
+    /** The asked models, in the order of the settings; when they aren't asked, the ones with cached results. */
     val models: List<String>,
     /** Results by model, in the order they came; the models that have none yet are waited for. */
     val results: Map<String, ModelResult>,
     /** What the downloaded dictionaries have for the fragment. */
     val dictionary: List<DictionaryResult> = emptyList(),
+    /** False when only the cache is looked in: without auto-translation, a selection costs no requests. */
+    val modelsAsked: Boolean = true,
 ) {
     val pending: List<String>
         get() = models.filter { it !in results }
@@ -101,9 +103,6 @@ class TranslationViewModel(
     private var settings = TranslationSettings()
     private var key: TranslationKey? = null
 
-    /** Whether the models are asked for [state]: a selection is only looked up in the dictionaries without auto-translation. */
-    private var modelsAsked = false
-
     /** The parent of the current translation's requests. */
     private var requests: Job = Job()
 
@@ -114,7 +113,7 @@ class TranslationViewModel(
     /**
      * To be called on every change of the selection; [excerpt] is null when it's cleared. Until the new
      * selection settles, the translation of the previous one stays. The models are only asked with
-     * [TranslationSettings.autoTranslate]; the dictionaries always, they cost nothing.
+     * [TranslationSettings.autoTranslate]; the dictionaries and the cache always, they cost nothing.
      */
     fun select(excerpt: Excerpt?, settings: TranslationSettings) {
         val selection = excerpt?.let { it to settings }
@@ -156,8 +155,10 @@ class TranslationViewModel(
         viewModelScope.launch { cache.clear() }
     }
 
-    private fun isCurrent(excerpt: Excerpt, settings: TranslationSettings, needsModels: Boolean): Boolean =
-        state.value?.excerpt == excerpt && this.settings == settings && (modelsAsked || !needsModels)
+    private fun isCurrent(excerpt: Excerpt, settings: TranslationSettings, needsModels: Boolean): Boolean {
+        val state = state.value ?: return false
+        return state.excerpt == excerpt && this.settings == settings && (state.modelsAsked || !needsModels)
+    }
 
     private fun cancelPending() {
         pendingJob?.cancel()
@@ -169,11 +170,16 @@ class TranslationViewModel(
         stop()
         requests = SupervisorJob(viewModelScope.coroutineContext.job)
         this.settings = settings
-        modelsAsked = askModels
-        val models = if (askModels && settings.isConfigured) settings.models else emptyList()
+        val models = if (settings.isConfigured) settings.models else emptyList()
         val key = TranslationKey(excerpt, settings.sourceLanguage, settings.effectiveTargetLanguage)
         this.key = key
-        state.value = TranslationState(excerpt, settings.isConfigured, models, emptyMap())
+        state.value = TranslationState(
+            excerpt = excerpt,
+            configured = settings.isConfigured,
+            models = if (askModels) models else emptyList(),
+            results = emptyMap(),
+            modelsAsked = askModels,
+        )
         viewModelScope.launch(requests) {
             val found = dictionaries.lookup(excerpt.fragment)
             if (found.isNotEmpty()) state.update { it?.copy(dictionary = found) }
@@ -182,8 +188,14 @@ class TranslationViewModel(
         // The cache is ready long before anything is selected, so the cached results show at once.
         viewModelScope.launch(requests) {
             val cached = cache.get(key).filterKeys { it in models }
-            state.update { it?.copy(results = cached.mapValues { (_, translation) -> ModelResult.Done(translation) }) }
-            models.filter { it !in cached }.forEach(::request)
+            val results = cached.mapValues { (_, translation) -> ModelResult.Done(translation) }
+            if (askModels) {
+                state.update { it?.copy(results = results) }
+                models.filter { it !in cached }.forEach(::request)
+            } else {
+                // Shown, as they cost nothing, but the rest of the models aren't asked.
+                state.update { it?.copy(models = models.filter { model -> model in cached }, results = results) }
+            }
         }
     }
 

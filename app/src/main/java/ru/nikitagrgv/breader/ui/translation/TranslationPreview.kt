@@ -74,8 +74,8 @@ fun TranslationPreview(state: TranslationState, modifier: Modifier = Modifier) {
                     Text(text, style = MaterialTheme.typography.bodyLarge)
                 }
             }
-            // Outside of the scrolled lines, so it's always seen. Only about the models.
-            if (state.models.isNotEmpty()) Column(horizontalAlignment = Alignment.End) {
+            // Outside of the scrolled lines, so it's always seen. Only while the models are asked, not for cached results.
+            if (state.modelsAsked && state.models.isNotEmpty()) Column(horizontalAlignment = Alignment.End) {
                 Text(
                     text = stringResource(R.string.translation_progress, state.results.size, state.models.size),
                     style = MaterialTheme.typography.labelMedium,

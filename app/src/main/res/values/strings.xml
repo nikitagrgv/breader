@@ -70,7 +70,7 @@
     </plurals>
     <string name="context_words_summary">Text around the selection sent along with it, so the right meaning is picked.</string>
     <string name="auto_translate">Translate on selection</string>
-    <string name="auto_translate_summary">Ask the models as soon as text is selected and show their translations at the top. The dictionaries are looked up anyway. Also switched by a long press on the Translate button.</string>
+    <string name="auto_translate_summary">Ask the models as soon as text is selected and show their translations at the top. When off, only the dictionaries and the cached translations are shown, which cost no requests. Also switched by a long press on the Translate button.</string>
     <string name="translation_cache">Cache</string>
     <string name="translation_cache_off">Off</string>
     <plurals name="translation_cache_value">
