@@ -107,6 +107,7 @@ import kotlin.math.roundToInt
  * @param contentPadding insets for everything except the book text, which uses the whole screen.
  * @param translationPreview brief translations of the selected text, shown at the top; null to show none.
  * @param onSelectionChange gets every change of the selection in the book; null when it's cleared.
+ * @param autoTranslate whether the selection is translated at once; the selection is reported again when it changes.
  * @param readingTimeMs how long the open book has been read, for the top bar.
  * @param onReadingTime gets the time the book is read for, in parts, while the reader is shown in the resumed app.
  */
@@ -125,6 +126,8 @@ fun ReaderScreen(
     translationPreview: TranslationState?,
     onSelectionChange: (BookSelection?) -> Unit,
     onTranslate: (BookSelection) -> Unit,
+    autoTranslate: Boolean,
+    onAutoTranslateChange: (Boolean) -> Unit,
     onLookUp: (BookSelection) -> Unit,
     onGrammar: (BookSelection) -> Unit,
     onOpenLibrary: () -> Unit,
@@ -162,6 +165,8 @@ fun ReaderScreen(
                         translationPreview = translationPreview,
                         onSelectionChange = onSelectionChange,
                         onTranslate = onTranslate,
+                        autoTranslate = autoTranslate,
+                        onAutoTranslateChange = onAutoTranslateChange,
                         onLookUp = onLookUp,
                         onGrammar = onGrammar,
                     )
@@ -193,6 +198,8 @@ private fun BookText(
     translationPreview: TranslationState?,
     onSelectionChange: (BookSelection?) -> Unit,
     onTranslate: (BookSelection) -> Unit,
+    autoTranslate: Boolean,
+    onAutoTranslateChange: (Boolean) -> Unit,
     onLookUp: (BookSelection) -> Unit,
     onGrammar: (BookSelection) -> Unit,
 ) {
@@ -257,6 +264,10 @@ private fun BookText(
             // The selection goes away with the text, e.g. when another tab is opened.
             currentOnSelectionChange(null)
         }
+    }
+    // Translated anew, or only looked up in the dictionaries, without selecting it again.
+    LaunchedEffect(autoTranslate) {
+        selectionState.locate(paragraphs)?.let { currentOnSelectionChange(it) }
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -356,6 +367,8 @@ private fun BookText(
                     selectionState.locate(paragraphs)?.let(onTranslate)
                     selectionState.clear()
                 },
+                autoTranslate = autoTranslate,
+                onAutoTranslateChange = onAutoTranslateChange,
                 onLookUp = {
                     selectionState.locate(paragraphs)?.let(onLookUp)
                     selectionState.clear()

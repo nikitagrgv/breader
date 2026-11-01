@@ -46,6 +46,8 @@ data class TranslationSettings(
     val contextWords: Int = DEFAULT_CONTEXT_WORDS,
     /** How many recently selected fragments keep their translations, so selecting one again needs no requests. */
     val cacheSize: Int = DEFAULT_CACHE_SIZE,
+    /** Translate the selected text at once, showing it at the top of the reader; otherwise only on request. */
+    val autoTranslate: Boolean = true,
 ) {
     val isConfigured: Boolean
         get() = apiKey.isNotBlank() && models.isNotEmpty()

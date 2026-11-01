@@ -84,10 +84,10 @@ class TranslationViewModel(
 
     /**
      * The translation of the selected text; null when nothing is selected, or when there's nothing to show:
-     * translation isn't set up and the dictionaries have nothing.
+     * no models are asked (translation isn't set up, or not on selection) and the dictionaries have nothing.
      */
     val preview: StateFlow<TranslationState?> = combine(state, selected) { state, selected ->
-        state?.takeIf { selected && (it.configured || it.dictionary.isNotEmpty()) }
+        state?.takeIf { selected && (it.models.isNotEmpty() || it.dictionary.isNotEmpty()) }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     /** The translation shown in detail; null when it isn't asked for. */
@@ -101,6 +101,9 @@ class TranslationViewModel(
     private var settings = TranslationSettings()
     private var key: TranslationKey? = null
 
+    /** Whether the models are asked for [state]: a selection is only looked up in the dictionaries without auto-translation. */
+    private var modelsAsked = false
+
     /** The parent of the current translation's requests. */
     private var requests: Job = Job()
 
@@ -110,7 +113,8 @@ class TranslationViewModel(
 
     /**
      * To be called on every change of the selection; [excerpt] is null when it's cleared. Until the new
-     * selection settles, the translation of the previous one stays.
+     * selection settles, the translation of the previous one stays. The models are only asked with
+     * [TranslationSettings.autoTranslate]; the dictionaries always, they cost nothing.
      */
     fun select(excerpt: Excerpt?, settings: TranslationSettings) {
         val selection = excerpt?.let { it to settings }
@@ -121,23 +125,23 @@ class TranslationViewModel(
                 selected.value = false
                 if (!sheetOpen.value) stop()
             }
-            isCurrent(excerpt, settings) -> selected.value = true
+            isCurrent(excerpt, settings, needsModels = settings.autoTranslate) -> selected.value = true
             else -> {
                 pending = selection
                 pendingJob = viewModelScope.launch {
                     delay(SELECTION_DELAY_MS)
                     pending = null
-                    start(excerpt, settings)
+                    start(excerpt, settings, askModels = settings.autoTranslate)
                     selected.value = true
                 }
             }
         }
     }
 
-    /** Shows the translation in detail; the one of the preview if it's of the same [excerpt]. */
+    /** Shows the translation in detail; the one of the preview if it's of the same [excerpt] and the models were asked. */
     fun openSheet(excerpt: Excerpt, settings: TranslationSettings) {
         cancelPending()
-        if (!isCurrent(excerpt, settings)) start(excerpt, settings)
+        if (!isCurrent(excerpt, settings, needsModels = true)) start(excerpt, settings, askModels = true)
         sheetOpen.value = true
     }
 
@@ -152,8 +156,8 @@ class TranslationViewModel(
         viewModelScope.launch { cache.clear() }
     }
 
-    private fun isCurrent(excerpt: Excerpt, settings: TranslationSettings): Boolean =
-        state.value?.excerpt == excerpt && this.settings == settings
+    private fun isCurrent(excerpt: Excerpt, settings: TranslationSettings, needsModels: Boolean): Boolean =
+        state.value?.excerpt == excerpt && this.settings == settings && (modelsAsked || !needsModels)
 
     private fun cancelPending() {
         pendingJob?.cancel()
@@ -161,11 +165,12 @@ class TranslationViewModel(
         pending = null
     }
 
-    private fun start(excerpt: Excerpt, settings: TranslationSettings) {
+    private fun start(excerpt: Excerpt, settings: TranslationSettings, askModels: Boolean) {
         stop()
         requests = SupervisorJob(viewModelScope.coroutineContext.job)
         this.settings = settings
-        val models = if (settings.isConfigured) settings.models else emptyList()
+        modelsAsked = askModels
+        val models = if (askModels && settings.isConfigured) settings.models else emptyList()
         val key = TranslationKey(excerpt, settings.sourceLanguage, settings.effectiveTargetLanguage)
         this.key = key
         state.value = TranslationState(excerpt, settings.isConfigured, models, emptyMap())

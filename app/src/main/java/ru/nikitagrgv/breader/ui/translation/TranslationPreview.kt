@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -66,6 +67,8 @@ fun TranslationPreview(state: TranslationState, modifier: Modifier = Modifier) {
                         )
                         Text(dictionaryLine, style = MaterialTheme.typography.bodyLarge)
                     }
+                    // Without it, a short translation under a short dictionary line reads as its continuation.
+                    if (translations.isNotEmpty()) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 }
                 for (text in translations) {
                     Text(text, style = MaterialTheme.typography.bodyLarge)

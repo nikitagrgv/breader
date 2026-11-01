@@ -154,6 +154,8 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
                             settings = settings.translation,
                         )
                     },
+                    autoTranslate = settings.translation.autoTranslate,
+                    onAutoTranslateChange = { enabled -> viewModel.updateTranslationSettings { it.copy(autoTranslate = enabled) } },
                     onLookUp = { selection -> dictionaryViewModel.lookUp(selection.excerpt(contextWords = 0).fragment) },
                     onGrammar = { selection ->
                         grammarViewModel.explain(

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -14,6 +15,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -27,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
@@ -138,6 +141,17 @@ fun TranslationSection(
             )
         },
         modifier = Modifier.clickable { pickingModels = true },
+    )
+
+    ListItem(
+        headlineContent = { Text(stringResource(R.string.auto_translate)) },
+        supportingContent = { Text(stringResource(R.string.auto_translate_summary)) },
+        trailingContent = { Switch(checked = settings.autoTranslate, onCheckedChange = null) },
+        modifier = Modifier.toggleable(
+            value = settings.autoTranslate,
+            role = Role.Switch,
+            onValueChange = { enabled -> onChange { it.copy(autoTranslate = enabled) } },
+        ),
     )
 
     Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {

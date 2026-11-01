@@ -73,6 +73,7 @@ class SettingsRepository(context: Context) {
             targetLanguage = this[TARGET_LANGUAGE] ?: defaults.targetLanguage,
             contextWords = this[CONTEXT_WORDS] ?: defaults.contextWords,
             cacheSize = this[TRANSLATION_CACHE_SIZE] ?: defaults.cacheSize,
+            autoTranslate = this[AUTO_TRANSLATE] ?: defaults.autoTranslate,
         )
     }
 
@@ -84,6 +85,7 @@ class SettingsRepository(context: Context) {
         this[TARGET_LANGUAGE] = settings.targetLanguage.trim()
         this[CONTEXT_WORDS] = settings.contextWords.coerceIn(0, TranslationSettings.MAX_CONTEXT_WORDS)
         this[TRANSLATION_CACHE_SIZE] = settings.cacheSize.coerceIn(0, TranslationSettings.MAX_CACHE_SIZE)
+        this[AUTO_TRANSLATE] = settings.autoTranslate
     }
 
     private companion object {
@@ -98,5 +100,6 @@ class SettingsRepository(context: Context) {
         val TARGET_LANGUAGE = stringPreferencesKey("target_language")
         val CONTEXT_WORDS = intPreferencesKey("context_words")
         val TRANSLATION_CACHE_SIZE = intPreferencesKey("translation_cache_size")
+        val AUTO_TRANSLATE = booleanPreferencesKey("auto_translate")
     }
 }
