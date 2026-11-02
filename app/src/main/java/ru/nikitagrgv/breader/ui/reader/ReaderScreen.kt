@@ -151,6 +151,8 @@ fun ReaderScreen(
     Surface(modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Box(Modifier.fillMaxSize()) {
             when (state) {
+                // Too short for anything to be worth showing, and "no book" may well be wrong.
+                ReaderState.Starting -> Unit
                 ReaderState.Empty -> ReaderMessage(
                     title = stringResource(R.string.reader_no_book),
                     text = stringResource(R.string.reader_no_book_hint),

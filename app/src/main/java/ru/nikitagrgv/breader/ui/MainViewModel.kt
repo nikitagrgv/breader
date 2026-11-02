@@ -54,7 +54,7 @@ class MainViewModel(
     val settings: StateFlow<AppSettings?> =
         settingsRepository.settings.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    private val _reader = MutableStateFlow<ReaderState>(ReaderState.Empty)
+    private val _reader = MutableStateFlow<ReaderState>(ReaderState.Starting)
     val reader: StateFlow<ReaderState> = _reader.asStateFlow()
 
     private val _events = Channel<LibraryEvent>(Channel.BUFFERED)
@@ -66,7 +66,8 @@ class MainViewModel(
         // Reopen the book that was being read last time.
         viewModelScope.launch {
             val library = repository.awaitLibrary()
-            library.books.find { it.id == library.currentBookId }?.let(::load)
+            val book = library.books.find { it.id == library.currentBookId }
+            if (book != null) load(book) else setReader(ReaderState.Empty)
         }
     }
 

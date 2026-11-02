@@ -90,14 +90,17 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
     val readerState by viewModel.reader.collectAsStateWithLifecycle()
     val library by viewModel.library.collectAsStateWithLifecycle()
     val readerSettings = remember(settings) { settings.toReaderSettings() }
-    var tab by rememberSaveable { mutableStateOf(MainTab.LIBRARY) }
-    var readerChromeVisible by rememberSaveable { mutableStateOf(true) }
+    var tab by rememberSaveable { mutableStateOf(MainTab.READER) }
+    // Hidden to begin with, as the app opens on the book being read.
+    var readerChromeVisible by rememberSaveable { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     // Keeps the saveable state (e.g. scroll positions) of a tab while another one is shown.
     val tabStates = rememberSaveableStateHolder()
 
-    // While reading, the text takes the whole screen; a tap brings the bars back.
-    val immersive = tab == MainTab.READER && readerState is ReaderState.Ready && !readerChromeVisible
+    // While reading, the text takes the whole screen; a tap brings the bars back. A book being opened counts too, so
+    // the bars don't show up just to slide away. Without a book to read, they're the way to go on from there.
+    val immersive = tab == MainTab.READER && !readerChromeVisible &&
+        readerState != ReaderState.Empty && readerState !is ReaderState.Failed
     SystemBarsVisibility(visible = !immersive)
 
     BackHandler(enabled = tab != MainTab.LIBRARY) { tab = MainTab.LIBRARY }

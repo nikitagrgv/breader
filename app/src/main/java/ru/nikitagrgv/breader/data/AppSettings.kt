@@ -69,9 +69,9 @@ data class AppSettings(
         const val DEFAULT_MARGINS = 12
         const val MAX_MARGINS = 40
         const val MARGINS_STEP = 4
-        const val DEFAULT_SELECTION_FADE_MS = 1000
-        const val MAX_SELECTION_FADE_MS = 5000
-        const val SELECTION_FADE_STEP_MS = 500
+        const val DEFAULT_SELECTION_FADE_MS = 300
+        const val MAX_SELECTION_FADE_MS = 2000
+        const val SELECTION_FADE_STEP_MS = 50
     }
 }
 
