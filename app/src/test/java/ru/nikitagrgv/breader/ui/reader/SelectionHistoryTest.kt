@@ -182,6 +182,27 @@ class SelectionHistoryTest {
     }
 
     @Test
+    fun `while the history is off, nothing is added and what's there stays`() {
+        val saved = ArrayList<List<BookRange>>()
+        val state = SelectionHistoryState(listOf(a, b)) { saved += it }
+        // It still counts as something the reader has selected.
+        assertTrue(state.onSelectionChange(c, maxEntries = 0))
+        assertEquals(listOf(a, b), state.history.entries)
+        assertEquals(emptyList<List<BookRange>>(), saved)
+        assertFalse(state.onSelectionChange(null, maxEntries = 0))
+        assertEquals(listOf(a, b), state.history.entries)
+    }
+
+    @Test
+    fun `turning the history on again goes on from what was there`() {
+        val state = SelectionHistoryState(listOf(a, b)) {}
+        state.onSelectionChange(c, maxEntries = 0)
+        state.onSelectionChange(null, maxEntries = 0)
+        state.onSelectionChange(c, maxEntries = 200)
+        assertEquals(listOf(a, b, c), state.history.entries)
+    }
+
+    @Test
     fun `a place that's gone is dropped without moving the walk`() {
         val walk = SelectionHistory(listOf(a, b, c)).back().back()
         assertEquals(b, walk.current)

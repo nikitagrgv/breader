@@ -83,7 +83,7 @@ class SettingsRepository(context: Context) {
 
     suspend fun setSelectionHistorySize(size: Int) {
         dataStore.edit {
-            it[SELECTION_HISTORY_SIZE] = size.coerceIn(AppSettings.MIN_SELECTION_HISTORY_SIZE, AppSettings.MAX_SELECTION_HISTORY_SIZE)
+            it[SELECTION_HISTORY_SIZE] = size.coerceIn(0, AppSettings.MAX_SELECTION_HISTORY_SIZE)
         }
     }
 

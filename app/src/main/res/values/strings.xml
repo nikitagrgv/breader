@@ -85,7 +85,8 @@
     <string name="selection_fade_value">%1$.1f s</string>
     <string name="selection_fade_off">Off</string>
     <string name="selection_history_size">History size</string>
-    <string name="selection_history_size_summary">How many selections each book keeps for the arrows in the reader. When there are more, the oldest ones are dropped.</string>
+    <string name="selection_history_size_summary">How many selections each book keeps for the arrows in the reader. When there are more, the oldest ones are dropped. When it\'s off, the arrows are hidden and nothing new is kept.</string>
+    <string name="selection_history_off">Off</string>
     <plurals name="selection_history_size_value">
         <item quantity="one">%1$d selection</item>
         <item quantity="other">%1$d selections</item>

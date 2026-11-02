@@ -250,12 +250,14 @@ fun SettingsScreen(
         SliderSetting(
             title = R.string.selection_history_size,
             summary = R.string.selection_history_size_summary,
-            value = selectionHistorySize.roundToInt().let { pluralStringResource(R.plurals.selection_history_size_value, it, it) },
+            value = selectionHistorySize.roundToInt().let {
+                if (it == 0) stringResource(R.string.selection_history_off) else pluralStringResource(R.plurals.selection_history_size_value, it, it)
+            },
             position = selectionHistorySize,
             onPositionChange = { selectionHistorySize = it },
             onPositionChangeFinished = { onSelectionHistorySizeChange(selectionHistorySize.roundToInt()) },
-            range = AppSettings.MIN_SELECTION_HISTORY_SIZE.toFloat()..AppSettings.MAX_SELECTION_HISTORY_SIZE.toFloat(),
-            steps = (AppSettings.MAX_SELECTION_HISTORY_SIZE - AppSettings.MIN_SELECTION_HISTORY_SIZE) / AppSettings.SELECTION_HISTORY_SIZE_STEP - 1,
+            range = 0f..AppSettings.MAX_SELECTION_HISTORY_SIZE.toFloat(),
+            steps = AppSettings.MAX_SELECTION_HISTORY_SIZE / AppSettings.SELECTION_HISTORY_SIZE_STEP - 1,
         )
 
         SectionHeader(R.string.settings_translation)

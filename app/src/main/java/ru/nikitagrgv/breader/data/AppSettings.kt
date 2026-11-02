@@ -57,7 +57,7 @@ data class AppSettings(
     val moreSelectionActions: Boolean = false,
     /** How long the place of the selection takes to fade out after a dialog about it is closed; 0 for not showing it. */
     val selectionFadeMs: Int = DEFAULT_SELECTION_FADE_MS,
-    /** How many selections each book's history keeps. */
+    /** How many selections each book's history keeps; 0 turns the history off, without losing what's in it. */
     val selectionHistorySize: Int = DEFAULT_SELECTION_HISTORY_SIZE,
     val translation: TranslationSettings = TranslationSettings(),
 ) {
@@ -75,7 +75,6 @@ data class AppSettings(
         const val MAX_SELECTION_FADE_MS = 2000
         const val SELECTION_FADE_STEP_MS = 50
         const val DEFAULT_SELECTION_HISTORY_SIZE = 200
-        const val MIN_SELECTION_HISTORY_SIZE = 50
         const val MAX_SELECTION_HISTORY_SIZE = 1000
         const val SELECTION_HISTORY_SIZE_STEP = 50
     }

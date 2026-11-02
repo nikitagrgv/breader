@@ -102,7 +102,8 @@ class SelectionHistoryState(entries: List<BookRange>, private val onEntriesChang
     }
 
     /**
-     * @param maxEntries see [SelectionHistory.selected].
+     * @param maxEntries see [SelectionHistory.selected]; 0 while the history is off, when nothing is added to it. What's
+     *   in it stays, so that turning it off for a while doesn't lose anything.
      * @return whether it's the reader who has just selected something.
      */
     internal fun onSelectionChange(range: BookRange?, maxEntries: Int): Boolean {
@@ -112,7 +113,7 @@ class SelectionHistoryState(entries: List<BookRange>, private val onEntriesChang
             return false
         }
         if (range == selectedByWalk) return false
-        update(history.selected(range, maxEntries))
+        if (maxEntries > 0) update(history.selected(range, maxEntries))
         return true
     }
 }

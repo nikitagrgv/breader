@@ -120,7 +120,7 @@ import kotlin.math.roundToInt
  * @param readingTimeMs how long the open book has been read, for the top bar.
  * @param onReadingTime gets the time the book is read for, in parts, while the reader is shown in the resumed app.
  * @param selectionFadeMs how long the place of the selection fades out after a dialog about it is closed; 0 for not showing it.
- * @param selectionHistorySize how many selections the book's history keeps.
+ * @param selectionHistorySize how many selections the book's history keeps; 0 if it's off.
  * @param dialogOpen whether a dialog opened from the selection's actions is still over the book.
  */
 @Composable
@@ -273,6 +273,7 @@ private fun BookText(
     val currentOnPositionChange by rememberUpdatedState(onPositionChange)
     val currentOnSelectionChange by rememberUpdatedState(onSelectionChange)
     val currentSelectionHistorySize by rememberUpdatedState(selectionHistorySize)
+    val historyOn = selectionHistorySize > 0
     fun savePosition() {
         if (history.holdsPosition) return
         val currentProgress = progress ?: return
@@ -391,6 +392,7 @@ private fun BookText(
                     progress?.let { stringResource(R.string.progress_percent, it * 100) }
                 },
                 readingTimeMs = readingTimeMs,
+                cornerSpace = if (historyOn) SelectionHistoryButtonsWidth else 0.dp,
                 modifier = Modifier.onSizeChanged { topBarHeight = it.height },
             )
         }
@@ -423,7 +425,7 @@ private fun BookText(
             (translationPreview ?: lastPreview.value)?.let {
                 TranslationPreview(
                     state = it,
-                    cornerSpace = DpSize(SelectionHistoryButtonsWidth, HISTORY_BUTTONS_ROW_HEIGHT),
+                    cornerSpace = if (historyOn) DpSize(SelectionHistoryButtonsWidth, HISTORY_BUTTONS_ROW_HEIGHT) else DpSize.Zero,
                     modifier = Modifier
                         .heightIn(max = previewMaxHeight)
                         .onSizeChanged { size -> previewHeight = size.height },
@@ -468,7 +470,7 @@ private fun BookText(
         // Over everything else at the top, which keeps clear of them, so that they stay in the same place all the time.
         // Hidden while just reading: a tap brings them along with the bars.
         AnimatedVisibility(
-            visible = chromeVisible || hasSelection || walker.isSelectionOnItsWay,
+            visible = historyOn && (chromeVisible || hasSelection || walker.isSelectionOnItsWay),
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier
@@ -733,14 +735,14 @@ private fun rememberParagraphLooks(settings: ReaderSettings): Map<ParagraphKind,
 }
 
 @Composable
-private fun ReaderTopBar(title: String, position: String?, readingTimeMs: Long, modifier: Modifier = Modifier) {
+private fun ReaderTopBar(title: String, position: String?, readingTimeMs: Long, cornerSpace: Dp, modifier: Modifier = Modifier) {
     Surface(color = MaterialTheme.colorScheme.surfaceContainer, modifier = modifier.fillMaxWidth()) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
                 // The buttons going through the selections are shown over the right end.
-                .absolutePadding(left = 16.dp, right = 16.dp + SelectionHistoryButtonsWidth, top = 12.dp, bottom = 12.dp),
+                .absolutePadding(left = 16.dp, right = 16.dp + cornerSpace, top = 12.dp, bottom = 12.dp),
         ) {
             Text(
                 text = title,
