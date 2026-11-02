@@ -158,6 +158,10 @@ class MainViewModel(
         viewModelScope.launch { settingsRepository.setSelectionFade(ms) }
     }
 
+    fun setSelectionHistorySize(size: Int) {
+        viewModelScope.launch { settingsRepository.setSelectionHistorySize(size) }
+    }
+
     fun setSeekBarPosition(position: SeekBarPosition) {
         viewModelScope.launch { settingsRepository.setSeekBarPosition(position) }
     }

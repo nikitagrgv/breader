@@ -84,6 +84,7 @@ fun SettingsScreen(
     onHyphenationChange: (Boolean) -> Unit,
     onSeekBarPositionChange: (SeekBarPosition) -> Unit,
     onSelectionFadeChange: (Int) -> Unit,
+    onSelectionHistorySizeChange: (Int) -> Unit,
     onTranslationChange: ((TranslationSettings) -> TranslationSettings) -> Unit,
     cachedTranslations: Int,
     onClearTranslationCache: () -> Unit,
@@ -96,6 +97,7 @@ fun SettingsScreen(
     var lineSpacing by remember(settings.lineSpacing) { mutableFloatStateOf(settings.lineSpacing) }
     var margins by remember(settings.margins) { mutableFloatStateOf(settings.margins.toFloat()) }
     var selectionFade by remember(settings.selectionFadeMs) { mutableFloatStateOf(settings.selectionFadeMs.toFloat()) }
+    var selectionHistorySize by remember(settings.selectionHistorySize) { mutableFloatStateOf(settings.selectionHistorySize.toFloat()) }
 
     Column(
         modifier
@@ -244,6 +246,16 @@ fun SettingsScreen(
             onPositionChangeFinished = { onSelectionFadeChange(selectionFade.roundToInt()) },
             range = 0f..AppSettings.MAX_SELECTION_FADE_MS.toFloat(),
             steps = AppSettings.MAX_SELECTION_FADE_MS / AppSettings.SELECTION_FADE_STEP_MS - 1,
+        )
+        SliderSetting(
+            title = R.string.selection_history_size,
+            summary = R.string.selection_history_size_summary,
+            value = selectionHistorySize.roundToInt().let { pluralStringResource(R.plurals.selection_history_size_value, it, it) },
+            position = selectionHistorySize,
+            onPositionChange = { selectionHistorySize = it },
+            onPositionChangeFinished = { onSelectionHistorySizeChange(selectionHistorySize.roundToInt()) },
+            range = AppSettings.MIN_SELECTION_HISTORY_SIZE.toFloat()..AppSettings.MAX_SELECTION_HISTORY_SIZE.toFloat(),
+            steps = (AppSettings.MAX_SELECTION_HISTORY_SIZE - AppSettings.MIN_SELECTION_HISTORY_SIZE) / AppSettings.SELECTION_HISTORY_SIZE_STEP - 1,
         )
 
         SectionHeader(R.string.settings_translation)

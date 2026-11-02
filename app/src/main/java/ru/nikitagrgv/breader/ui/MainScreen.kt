@@ -205,6 +205,7 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
                     moreSelectionActions = settings.moreSelectionActions,
                     onMoreSelectionActionsChange = viewModel::setMoreSelectionActions,
                     selectionFadeMs = settings.selectionFadeMs,
+                    selectionHistorySize = settings.selectionHistorySize,
                     // Going from a dictionary entry to managing the dictionaries still keeps the book covered.
                     dialogOpen = translation != null || grammar != null || dictionaryLookup != null || managingDictionaries,
                     onOpenLibrary = { tab = MainTab.LIBRARY },
@@ -227,6 +228,7 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
                     onHyphenationChange = viewModel::setHyphenation,
                     onSeekBarPositionChange = viewModel::setSeekBarPosition,
                     onSelectionFadeChange = viewModel::setSelectionFade,
+                    onSelectionHistorySizeChange = viewModel::setSelectionHistorySize,
                     onTranslationChange = viewModel::updateTranslationSettings,
                     cachedTranslations = cachedTranslations,
                     onClearTranslationCache = translationViewModel::clearCache,

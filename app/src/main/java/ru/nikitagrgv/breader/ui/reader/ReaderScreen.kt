@@ -120,6 +120,7 @@ import kotlin.math.roundToInt
  * @param readingTimeMs how long the open book has been read, for the top bar.
  * @param onReadingTime gets the time the book is read for, in parts, while the reader is shown in the resumed app.
  * @param selectionFadeMs how long the place of the selection fades out after a dialog about it is closed; 0 for not showing it.
+ * @param selectionHistorySize how many selections the book's history keeps.
  * @param dialogOpen whether a dialog opened from the selection's actions is still over the book.
  */
 @Composable
@@ -147,6 +148,7 @@ fun ReaderScreen(
     moreSelectionActions: Boolean,
     onMoreSelectionActionsChange: (Boolean) -> Unit,
     selectionFadeMs: Int,
+    selectionHistorySize: Int,
     dialogOpen: Boolean,
     onOpenLibrary: () -> Unit,
     modifier: Modifier = Modifier,
@@ -195,6 +197,7 @@ fun ReaderScreen(
                         moreSelectionActions = moreSelectionActions,
                         onMoreSelectionActionsChange = onMoreSelectionActionsChange,
                         selectionFadeMs = selectionFadeMs,
+                        selectionHistorySize = selectionHistorySize,
                         dialogOpen = dialogOpen,
                     )
                 }
@@ -235,6 +238,7 @@ private fun BookText(
     moreSelectionActions: Boolean,
     onMoreSelectionActionsChange: (Boolean) -> Unit,
     selectionFadeMs: Int,
+    selectionHistorySize: Int,
     dialogOpen: Boolean,
 ) {
     val paragraphs = state.content.paragraphs
@@ -268,6 +272,7 @@ private fun BookText(
     val currentOnHideChrome by rememberUpdatedState(onHideChrome)
     val currentOnPositionChange by rememberUpdatedState(onPositionChange)
     val currentOnSelectionChange by rememberUpdatedState(onSelectionChange)
+    val currentSelectionHistorySize by rememberUpdatedState(selectionHistorySize)
     fun savePosition() {
         if (history.holdsPosition) return
         val currentProgress = progress ?: return
@@ -337,12 +342,12 @@ private fun BookText(
                 .collect { located ->
                     currentOnSelectionChange(located)
                     // A new selection is where the reader is now.
-                    if (history.onSelectionChange(located?.range)) fade.place = null
+                    if (history.onSelectionChange(located?.range, currentSelectionHistorySize)) fade.place = null
                 }
         } finally {
             // The selection goes away with the text, e.g. when another tab is opened.
             currentOnSelectionChange(null)
-            history.onSelectionChange(null)
+            history.onSelectionChange(null, currentSelectionHistorySize)
         }
     }
     // Translated anew, or only looked up in the dictionaries, without selecting it again.

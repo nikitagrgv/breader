@@ -7,8 +7,6 @@ import androidx.compose.runtime.setValue
 import ru.nikitagrgv.breader.data.ReadingPosition
 import ru.nikitagrgv.breader.translation.BookRange
 
-private const val MAX_ENTRIES = 200
-
 /**
  * What was selected in a book and where in it the reader is. It's walked like undo and redo, except that nothing is
  * lost: a new selection goes on top instead of dropping what's ahead, so looking something up in the middle of a walk
@@ -46,14 +44,16 @@ data class SelectionHistory(
     /**
      * The reader has selected [range]. Changing the current selection, as dragging does on the way to what's wanted,
      * only updates its entry: otherwise, every step of the way would be one to go back through.
+     * @param maxEntries how many are kept when one is added, which loses the oldest. A limit that's been lowered takes
+     *   effect only then, so that moving it by mistake doesn't lose anything at once.
      */
-    fun selected(range: BookRange): SelectionHistory {
+    fun selected(range: BookRange, maxEntries: Int): SelectionHistory {
         val current = current
         if (range == current) return copy(onEntry = true)
         if (onEntry && current != null && range.touches(current)) {
             return copy(entries = entries.toMutableList().apply { this[cursor] = range })
         }
-        val updated = (entries - range + range).takeLast(MAX_ENTRIES)
+        val updated = (entries - range + range).takeLast(maxEntries)
         return SelectionHistory(updated, cursor = updated.lastIndex, home = updated.lastIndex, onEntry = true)
     }
 
@@ -101,15 +101,18 @@ class SelectionHistoryState(entries: List<BookRange>, private val onEntriesChang
         }
     }
 
-    /** @return whether it's the reader who has just selected something. */
-    internal fun onSelectionChange(range: BookRange?): Boolean {
+    /**
+     * @param maxEntries see [SelectionHistory.selected].
+     * @return whether it's the reader who has just selected something.
+     */
+    internal fun onSelectionChange(range: BookRange?, maxEntries: Int): Boolean {
         if (range == null) {
             selectedByWalk = null
             update(history.cleared())
             return false
         }
         if (range == selectedByWalk) return false
-        update(history.selected(range))
+        update(history.selected(range, maxEntries))
         return true
     }
 }

@@ -18,6 +18,9 @@ class SelectionHistoryTest {
 
     private fun SelectionHistory.steps() = stepsBack to stepsForward
 
+    /** For when the limit doesn't matter. */
+    private fun SelectionHistory.selected(range: BookRange) = selected(range, maxEntries = 100)
+
     @Test
     fun `a book starts on top of its history`() {
         val history = SelectionHistory(listOf(a, b))
@@ -149,10 +152,33 @@ class SelectionHistoryTest {
     @Test
     fun `the history is limited, losing the oldest`() {
         var history = SelectionHistory()
-        for (i in 0 until 205) history = history.cleared().selected(range(i, 0, 1))
+        for (i in 0 until 205) history = history.cleared().selected(range(i, 0, 1), maxEntries = 200)
         assertEquals(200, history.entries.size)
         assertEquals(range(5, 0, 1), history.entries.first())
         assertEquals(range(204, 0, 1), history.current)
+    }
+
+    @Test
+    fun `a lower limit takes effect when something is added`() {
+        val history = SelectionHistory(listOf(a, b, c))
+        val d = range(3, 0, 5)
+        val added = history.selected(d, maxEntries = 2)
+        assertEquals(listOf(c, d), added.entries)
+        assertEquals(d, added.current)
+        assertEquals(1 to 0, added.steps())
+    }
+
+    @Test
+    fun `walking and changing a selection don't drop anything over the limit`() {
+        val wider = range(1, 0, 9)
+        val history = SelectionHistory(listOf(a, b, c)).back().back().selected(wider, maxEntries = 1)
+        assertEquals(listOf(a, wider, c), history.entries)
+    }
+
+    @Test
+    fun `a higher limit keeps more`() {
+        val history = SelectionHistory(listOf(a, b)).selected(c, maxEntries = 3)
+        assertEquals(listOf(a, b, c), history.entries)
     }
 
     @Test
