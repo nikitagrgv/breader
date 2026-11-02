@@ -201,6 +201,9 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
                     },
                     moreSelectionActions = settings.moreSelectionActions,
                     onMoreSelectionActionsChange = viewModel::setMoreSelectionActions,
+                    selectionFadeMs = settings.selectionFadeMs,
+                    // Going from a dictionary entry to managing the dictionaries still keeps the book covered.
+                    dialogOpen = translation != null || grammar != null || dictionaryLookup != null || managingDictionaries,
                     onOpenLibrary = { tab = MainTab.LIBRARY },
                 )
                 MainTab.FAVORITES -> FavoritesScreen(
@@ -220,6 +223,7 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
                     onJustifyChange = viewModel::setJustify,
                     onHyphenationChange = viewModel::setHyphenation,
                     onSeekBarPositionChange = viewModel::setSeekBarPosition,
+                    onSelectionFadeChange = viewModel::setSelectionFade,
                     onTranslationChange = viewModel::updateTranslationSettings,
                     cachedTranslations = cachedTranslations,
                     onClearTranslationCache = translationViewModel::clearCache,

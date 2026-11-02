@@ -1,6 +1,7 @@
 package ru.nikitagrgv.breader.translation
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 import ru.nikitagrgv.breader.format.Paragraph
 
@@ -14,6 +15,23 @@ class ExcerptTest {
 
     private fun excerpt(start: TextPosition, end: TextPosition, words: Int) =
         BookSelection(paragraphs, start, end).excerpt(words)
+
+    @Test
+    fun `part of a paragraph is found within one paragraph`() {
+        val selection = BookSelection(paragraphs, TextPosition(2, 10), TextPosition(2, 13))
+        assertEquals(10 to 13, selection.partOf(2))
+        assertNull(selection.partOf(1))
+        assertNull(selection.partOf(3))
+    }
+
+    @Test
+    fun `part of a paragraph is found across several paragraphs`() {
+        val selection = BookSelection(paragraphs, TextPosition(0, 4), TextPosition(3, 4))
+        assertEquals(4 to 14, selection.partOf(0))
+        assertEquals(0 to 0, selection.partOf(1))
+        assertEquals(0 to 26, selection.partOf(2))
+        assertEquals(0 to 4, selection.partOf(3))
+    }
 
     @Test
     fun `context is taken from the same paragraph when it's enough`() {

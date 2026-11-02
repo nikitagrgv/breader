@@ -83,6 +83,7 @@ fun SettingsScreen(
     onJustifyChange: (Boolean) -> Unit,
     onHyphenationChange: (Boolean) -> Unit,
     onSeekBarPositionChange: (SeekBarPosition) -> Unit,
+    onSelectionFadeChange: (Int) -> Unit,
     onTranslationChange: ((TranslationSettings) -> TranslationSettings) -> Unit,
     cachedTranslations: Int,
     onClearTranslationCache: () -> Unit,
@@ -94,6 +95,7 @@ fun SettingsScreen(
     var fontSize by remember(settings.fontSize) { mutableFloatStateOf(settings.fontSize) }
     var lineSpacing by remember(settings.lineSpacing) { mutableFloatStateOf(settings.lineSpacing) }
     var margins by remember(settings.margins) { mutableFloatStateOf(settings.margins.toFloat()) }
+    var selectionFade by remember(settings.selectionFadeMs) { mutableFloatStateOf(settings.selectionFadeMs.toFloat()) }
 
     Column(
         modifier
@@ -227,6 +229,22 @@ fun SettingsScreen(
                 )
             }
         }
+
+        SectionHeader(R.string.settings_selection)
+        SliderSetting(
+            title = R.string.selection_fade,
+            summary = R.string.selection_fade_summary,
+            value = if (selectionFade.roundToInt() == 0) {
+                stringResource(R.string.selection_fade_off)
+            } else {
+                stringResource(R.string.selection_fade_value, selectionFade / 1000)
+            },
+            position = selectionFade,
+            onPositionChange = { selectionFade = it },
+            onPositionChangeFinished = { onSelectionFadeChange(selectionFade.roundToInt()) },
+            range = 0f..AppSettings.MAX_SELECTION_FADE_MS.toFloat(),
+            steps = AppSettings.MAX_SELECTION_FADE_MS / AppSettings.SELECTION_FADE_STEP_MS - 1,
+        )
 
         SectionHeader(R.string.settings_translation)
         TranslationSection(settings.translation, onTranslationChange, cachedTranslations, onClearTranslationCache)

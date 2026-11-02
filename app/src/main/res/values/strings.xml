@@ -76,6 +76,12 @@
     <string name="position_top">Top</string>
     <string name="position_bottom">Bottom</string>
 
+    <string name="settings_selection">Selection</string>
+    <string name="selection_fade">Mark after closing</string>
+    <string name="selection_fade_summary">After you close a translation, a grammar explanation or a dictionary entry, the text it was about is marked in orange for this long, fading away, so you don\'t lose your place.</string>
+    <string name="selection_fade_value">%1$.1f s</string>
+    <string name="selection_fade_off">Off</string>
+
     <string name="settings_translation">Translation</string>
     <string name="openrouter_key">OpenRouter API key</string>
     <string name="openrouter_key_hint">Get one at &lt;a href="https://openrouter.ai/keys"&gt;openrouter.ai/keys&lt;/a&gt;</string>

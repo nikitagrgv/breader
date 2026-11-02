@@ -39,6 +39,7 @@ class SettingsRepository(context: Context) {
                     ?.let { name -> SeekBarPosition.entries.find { it.name == name } }
                     ?: defaults.seekBarPosition,
                 moreSelectionActions = prefs[MORE_SELECTION_ACTIONS] ?: defaults.moreSelectionActions,
+                selectionFadeMs = prefs[SELECTION_FADE_MS] ?: defaults.selectionFadeMs,
                 translation = prefs.translationSettings(),
             )
         }
@@ -73,6 +74,10 @@ class SettingsRepository(context: Context) {
 
     suspend fun setMoreSelectionActions(open: Boolean) {
         dataStore.edit { it[MORE_SELECTION_ACTIONS] = open }
+    }
+
+    suspend fun setSelectionFade(ms: Int) {
+        dataStore.edit { it[SELECTION_FADE_MS] = ms.coerceIn(0, AppSettings.MAX_SELECTION_FADE_MS) }
     }
 
     suspend fun setSeekBarPosition(position: SeekBarPosition) {
@@ -118,6 +123,7 @@ class SettingsRepository(context: Context) {
         val HYPHENATION = booleanPreferencesKey("hyphenation")
         val SEEK_BAR_POSITION = stringPreferencesKey("seek_bar_position")
         val MORE_SELECTION_ACTIONS = booleanPreferencesKey("more_selection_actions")
+        val SELECTION_FADE_MS = intPreferencesKey("selection_fade_ms")
         val OPENROUTER_KEY = stringPreferencesKey("openrouter_key")
         val TRANSLATION_MODELS = stringPreferencesKey("translation_models")
         val SOURCE_LANGUAGE = stringPreferencesKey("source_language")

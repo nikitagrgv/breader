@@ -58,12 +58,11 @@ internal class PdfSelection(val book: PdfBook) : ReaderSelection {
     }
 
     /** The rectangles of the selected lines of a page, whose text is [text]. */
-    fun rectsOn(page: Int, text: PdfPageText): List<PdfRect> {
-        val range = range ?: return emptyList()
-        if (page !in range.start.paragraph..range.end.paragraph) return emptyList()
-        return text.rects(
-            start = if (page == range.start.paragraph) range.start.offset else 0,
-            end = if (page == range.end.paragraph) range.end.offset else text.text.length,
-        )
-    }
+    fun rectsOn(page: Int, text: PdfPageText): List<PdfRect> = locate()?.rectsOn(page, text).orEmpty()
+}
+
+/** The rectangles of the lines of this selection on a page, whose text is [text]. */
+internal fun BookSelection.rectsOn(page: Int, text: PdfPageText): List<PdfRect> {
+    val (start, end) = partOf(page) ?: return emptyList()
+    return text.rects(start, end)
 }

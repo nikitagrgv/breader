@@ -65,6 +65,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.ClipEntry
@@ -75,6 +76,7 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
@@ -114,6 +116,8 @@ import kotlin.math.roundToInt
  * @param autoTranslate whether the selection is translated at once; the selection is reported again when it changes.
  * @param readingTimeMs how long the open book has been read, for the top bar.
  * @param onReadingTime gets the time the book is read for, in parts, while the reader is shown in the resumed app.
+ * @param selectionFadeMs how long the place of the selection fades out after a dialog about it is closed; 0 for not showing it.
+ * @param dialogOpen whether a dialog opened from the selection's actions is still over the book.
  */
 @Composable
 fun ReaderScreen(
@@ -139,6 +143,8 @@ fun ReaderScreen(
     onFavorite: (BookSelection) -> Unit,
     moreSelectionActions: Boolean,
     onMoreSelectionActionsChange: (Boolean) -> Unit,
+    selectionFadeMs: Int,
+    dialogOpen: Boolean,
     onOpenLibrary: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -183,6 +189,8 @@ fun ReaderScreen(
                         onFavorite = onFavorite,
                         moreSelectionActions = moreSelectionActions,
                         onMoreSelectionActionsChange = onMoreSelectionActionsChange,
+                        selectionFadeMs = selectionFadeMs,
+                        dialogOpen = dialogOpen,
                     )
                 }
             }
@@ -221,6 +229,8 @@ private fun BookText(
     onFavorite: (BookSelection) -> Unit,
     moreSelectionActions: Boolean,
     onMoreSelectionActionsChange: (Boolean) -> Unit,
+    selectionFadeMs: Int,
+    dialogOpen: Boolean,
 ) {
     val paragraphs = state.content.paragraphs
     // Saveable, so the position survives switching tabs and configuration changes.
@@ -233,6 +243,7 @@ private fun BookText(
     val selection = remember(state.content) { selectionIn(state.content) }
     val hasSelection by remember(selection) { derivedStateOf { selection.hasSelection } }
     val selectedText by remember(selection) { derivedStateOf { selection.text } }
+    val fade = remember(selection) { SelectionFade() }
     // The position (0..1) the seek bar is dragged to; null while it isn't touched.
     var seekFraction by remember { mutableStateOf<Float?>(null) }
     var topBarHeight by remember { mutableIntStateOf(0) }
@@ -255,7 +266,17 @@ private fun BookText(
         currentOnPositionChange(position, currentProgress)
     }
 
+    /** The dialog is there instead of the selection, whose place stays marked. */
+    fun openDialog(open: (BookSelection) -> Unit) {
+        selection.locate()?.let {
+            open(it)
+            if (selectionFadeMs > 0) fade.place = it
+        }
+        selection.clear()
+    }
+
     ReadingTimeTracker(onReadingTime)
+    SelectionFadeEffect(fade, dialogOpen, selectionFadeMs, hasSelection)
 
     // The bars only get in the way while reading, so they're hidden once the user drags the text
     // (jumps made with the seek bar don't count).
@@ -300,6 +321,7 @@ private fun BookText(
                 selection = selection,
                 listState = listState,
                 viewport = viewport,
+                fade = fade,
                 onToggleChrome = onToggleChrome,
                 onHideChrome = onHideChrome,
             )
@@ -308,6 +330,7 @@ private fun BookText(
                 settings = settings,
                 selection = selection,
                 listState = listState,
+                fade = fade,
                 onToggleChrome = onToggleChrome,
             )
         }
@@ -378,24 +401,15 @@ private fun BookText(
                     }
                     selection.clear()
                 },
-                onTranslate = {
-                    selection.locate()?.let(onTranslate)
-                    selection.clear()
-                },
+                onTranslate = { openDialog(onTranslate) },
                 // The selection stays: the quick translation is shown for it, the star is filled for it.
                 onQuickTranslate = { selection.locate()?.let(onQuickTranslate) },
                 favorite = favoriteKey(selectedText) in favoriteKeys,
                 onFavorite = { selection.locate()?.let(onFavorite) },
                 autoTranslate = autoTranslate,
                 onAutoTranslateChange = onAutoTranslateChange,
-                onLookUp = {
-                    selection.locate()?.let(onLookUp)
-                    selection.clear()
-                },
-                onGrammar = {
-                    selection.locate()?.let(onGrammar)
-                    selection.clear()
-                },
+                onLookUp = { openDialog(onLookUp) },
+                onGrammar = { openDialog(onGrammar) },
             )
         }
     }
@@ -411,6 +425,7 @@ private fun ParagraphList(
     settings: ReaderSettings,
     selection: TextSelection,
     listState: LazyListState,
+    fade: SelectionFade,
     onToggleChrome: () -> Unit,
 ) {
     val looks = rememberParagraphLooks(settings)
@@ -452,6 +467,7 @@ private fun ParagraphList(
                         index = index,
                         look = looks.getValue(paragraph.kind),
                         modifier = if (blankLines > 0) Modifier.padding(top = blankLine * blankLines) else Modifier,
+                        fade = fade,
                     )
                 }
             }
@@ -548,16 +564,35 @@ private fun LazyListState.middleItemIndex(): Int {
     return layout.visibleItemsInfo.lastOrNull { it.offset <= middle }?.index ?: firstVisibleItemIndex
 }
 
-/** @param index the paragraph's index in the book, if it's from the book. */
+/**
+ * @param index the paragraph's index in the book, if it's from the book.
+ * @param fade the place to mark, for a paragraph from the book.
+ */
 @Composable
-private fun ParagraphText(paragraph: Paragraph, index: Int?, look: ParagraphLook, modifier: Modifier = Modifier) {
+private fun ParagraphText(
+    paragraph: Paragraph,
+    index: Int?,
+    look: ParagraphLook,
+    modifier: Modifier = Modifier,
+    fade: SelectionFade? = null,
+) {
     val text = remember(paragraph, index) { paragraph.toAnnotatedString(index) }
+    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     Text(
         text = text,
         style = look.style,
+        onTextLayout = { layout = it },
         modifier = modifier
             .fillMaxWidth()
-            .padding(look.padding),
+            .padding(look.padding)
+            // Inside the padding: the layout knows nothing about it. Only drawn again as the fading goes on.
+            .drawWithCache {
+                val part = index?.let { fade?.place?.partOf(it) }
+                val path = part?.let { (start, end) -> layout?.getPathForRange(start, end) }
+                onDrawBehind {
+                    if (path != null && fade != null) drawPath(path, SelectionFadeColor, alpha = fade.alpha)
+                }
+            },
     )
 }
 

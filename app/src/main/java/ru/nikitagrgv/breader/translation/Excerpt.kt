@@ -13,16 +13,21 @@ class BookSelection(val paragraphs: List<Paragraph>, val start: TextPosition, va
     fun excerpt(contextWords: Int): Excerpt {
         val fragment = buildString {
             for (index in start.paragraph..end.paragraph) {
-                val text = paragraphs[index].text
+                val (from, to) = partOf(index) ?: continue
                 if (index > start.paragraph) append('\n')
-                append(
-                    text,
-                    if (index == start.paragraph) start.offset else 0,
-                    if (index == end.paragraph) end.offset else text.length,
-                )
+                append(paragraphs[index].text, from, to)
             }
         }
         return Excerpt(textBefore(contextWords), fragment, textAfter(contextWords))
+    }
+
+    /** The offsets of what's selected in the paragraph [index], the second one exclusive; null if the selection isn't there. */
+    fun partOf(index: Int): Pair<Int, Int>? {
+        if (index !in start.paragraph..end.paragraph) return null
+        return Pair(
+            if (index == start.paragraph) start.offset else 0,
+            if (index == end.paragraph) end.offset else paragraphs[index].text.length,
+        )
     }
 
     private fun textBefore(words: Int): String {

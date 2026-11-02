@@ -184,6 +184,7 @@ internal fun PdfPages(
     selection: PdfSelection,
     listState: LazyListState,
     viewport: PdfViewport,
+    fade: SelectionFade,
     onToggleChrome: () -> Unit,
     onHideChrome: () -> Unit,
     modifier: Modifier = Modifier,
@@ -263,7 +264,7 @@ internal fun PdfPages(
             modifier = Modifier.fillMaxSize(),
         ) {
             items(count = book.pageSizes.size) { index ->
-                PdfPage(book, index, listState, viewport, selection, pageCache)
+                PdfPage(book, index, listState, viewport, selection, fade, pageCache)
             }
         }
         // Draws only, so that the touches go through to the pages; [detectPageGestures] takes those on the handles.
@@ -334,6 +335,7 @@ private fun PdfPage(
     list: LazyListState,
     viewport: PdfViewport,
     selection: PdfSelection,
+    fade: SelectionFade,
     cache: PageImageCache,
 ) {
     val size = book.pageSizes[index]
@@ -370,6 +372,9 @@ private fun PdfPage(
     val selectedRects by remember(selection, index) {
         derivedStateOf { text?.let { selection.rectsOn(index, it) }.orEmpty() }
     }
+    val fadingRects by remember(fade, index) {
+        derivedStateOf { text?.let { fade.place?.rectsOn(index, it) }.orEmpty() }
+    }
 
     Spacer(
         Modifier
@@ -381,14 +386,9 @@ private fun PdfPage(
                     image?.let { drawImage(it, dstSize = pageSize) }
                     detail?.let { drawDetail(it, pageWidth) }
                     val pointScale = pageWidth / size.width
-                    for (rect in selectedRects) {
-                        drawRect(
-                            color = SelectionColor,
-                            topLeft = Offset(rect.left * pointScale, rect.top * pointScale),
-                            size = Size((rect.right - rect.left) * pointScale, (rect.bottom - rect.top) * pointScale),
-                            blendMode = BlendMode.Multiply,
-                        )
-                    }
+                    // The alpha changes with every frame, which only the pages that show it need to know.
+                    if (fadingRects.isNotEmpty()) drawTextRects(fadingRects, pointScale, SelectionFadeColor, fade.alpha)
+                    drawTextRects(selectedRects, pointScale, SelectionColor)
                 }
             }
             // The height depends on the zoom, while the width is that of the list: the page is drawn past it.
@@ -401,6 +401,19 @@ private fun PdfPage(
 }
 
 private fun IntSize.toSize() = Size(width.toFloat(), height.toFloat())
+
+/** Multiplied with the page, so that the text stays dark. */
+private fun DrawScope.drawTextRects(rects: List<PdfRect>, pointScale: Float, color: Color, alpha: Float = 1f) {
+    for (rect in rects) {
+        drawRect(
+            color = color,
+            topLeft = Offset(rect.left * pointScale, rect.top * pointScale),
+            size = Size((rect.right - rect.left) * pointScale, (rect.bottom - rect.top) * pointScale),
+            alpha = alpha,
+            blendMode = BlendMode.Multiply,
+        )
+    }
+}
 
 /** At the current zoom it's pixel for pixel; while the zoom is changing, it's scaled along with the page. */
 private fun DrawScope.drawDetail(detail: PageDetail, pageWidth: Int) {
