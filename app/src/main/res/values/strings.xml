@@ -34,6 +34,9 @@
     <string name="translation_options">Translation options</string>
     <string name="quick_translation">Quick translation</string>
     <string name="more_actions">More actions</string>
+    <string name="previous_selection">Previous selection</string>
+    <string name="next_selection">Next selection</string>
+    <string name="back_to_reading_place">Back to where you were reading</string>
     <string name="fewer_actions">Fewer actions</string>
     <string name="add_to_favorites">Add to favorites</string>
     <string name="remove_from_favorites">Remove from favorites</string>
@@ -78,7 +81,7 @@
 
     <string name="settings_selection">Selection</string>
     <string name="selection_fade">Mark after closing</string>
-    <string name="selection_fade_summary">After you close a translation, a grammar explanation or a dictionary entry, the text it was about is marked in orange for this long, fading away, so you don\'t lose your place.</string>
+    <string name="selection_fade_summary">After you close a translation, a grammar explanation or a dictionary entry, or go to another selection with the arrows, the text you left is marked in orange for this long, fading away, so you don\'t lose your place.</string>
     <string name="selection_fade_value">%1$.1f s</string>
     <string name="selection_fade_off">Off</string>
 

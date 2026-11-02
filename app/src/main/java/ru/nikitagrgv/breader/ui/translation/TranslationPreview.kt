@@ -5,7 +5,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.absolutePadding
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -24,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import ru.nikitagrgv.breader.R
 import ru.nikitagrgv.breader.translation.translationKey
@@ -33,9 +36,10 @@ import ru.nikitagrgv.breader.translation.translationKey
  * all in one line marked with an icon; they're found at once. Then one line per distinct translation of the
  * models, in the order they came. New ones are added at the end, and a repeated one adds nothing, so the lines
  * being read don't move. Takes only the room it needs and scrolls when limited by the height from [modifier].
+ * @param cornerSpace what's to be left free in the top right corner, for what's shown over it.
  */
 @Composable
-fun TranslationPreview(state: TranslationState, modifier: Modifier = Modifier) {
+fun TranslationPreview(state: TranslationState, modifier: Modifier = Modifier, cornerSpace: DpSize = DpSize.Zero) {
     val dictionaryLine = state.dictionaryLine
     val translations = state.results.values
         .mapNotNull { (it as? ModelResult.Done)?.translation?.text }
@@ -46,7 +50,8 @@ fun TranslationPreview(state: TranslationState, modifier: Modifier = Modifier) {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .heightIn(min = cornerSpace.height)
+                .absolutePadding(left = 16.dp, right = 16.dp + cornerSpace.width, top = 8.dp, bottom = 8.dp),
         ) {
             Column(
                 verticalArrangement = Arrangement.spacedBy(6.dp),

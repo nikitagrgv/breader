@@ -2,10 +2,13 @@ package ru.nikitagrgv.breader.ui.reader
 
 import android.util.LruCache
 import android.widget.Toast
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.ScrollableState
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateCentroid
@@ -151,6 +154,15 @@ internal class PdfViewport(initialZoom: Float, initialPan: Float) {
 
     fun panBy(delta: Float) {
         requestedPan = (pan + delta).coerceIn(0f, maxPan)
+    }
+
+    suspend fun animatePanTo(target: Float) {
+        panState.animateScrollBy(pan - target.coerceIn(0f, maxPan), tween(JUMP_ANIMATION_MS, easing = FastOutSlowInEasing))
+    }
+
+    /** Puts the part of the pages from [left] to [right] in the middle of the view, unless it's in the view already. */
+    suspend fun animatePanToShow(left: Float, right: Float) {
+        if (left < pan || right > pan + width) animatePanTo((left + right - width) / 2)
     }
 
     /** Applies a pinch, keeping what's under the fingers ([center]) under the fingers. */

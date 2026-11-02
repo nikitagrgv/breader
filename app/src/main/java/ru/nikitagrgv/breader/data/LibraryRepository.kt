@@ -21,6 +21,7 @@ import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
 import org.json.JSONObject
 import ru.nikitagrgv.breader.format.BookFormat
+import ru.nikitagrgv.breader.translation.BookRange
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.IOException
@@ -97,6 +98,13 @@ class LibraryRepository(context: Context) {
         }
     }
 
+    fun updateSelectionHistory(id: String, history: List<BookRange>) =
+        mutate(saveDelayMs = 1_000) { library ->
+            library.copy(books = library.books.map {
+                if (it.id == id) it.copy(selectionHistory = history) else it
+            })
+        }
+
     private fun mutate(saveDelayMs: Long = 0, transform: (Library) -> Library) {
         val current = _library.value ?: return
         val updated = transform(current)
@@ -172,6 +180,7 @@ class LibraryRepository(context: Context) {
         .put("pan", position.pan)
         .put("progress", progress.toDouble())
         .put("readingTime", readingTimeMs)
+        .put("selectionHistory", JSONArray(selectionHistory.toInts()))
 
     private fun JSONObject.toBook() = Book(
         id = getString("id"),
@@ -184,6 +193,9 @@ class LibraryRepository(context: Context) {
         position = ReadingPosition(optInt("paragraph"), optInt("offset"), optDouble("zoom", 1.0).toFloat(), optInt("pan")),
         progress = optDouble("progress", 0.0).toFloat(),
         readingTimeMs = optLong("readingTime"),
+        selectionHistory = optJSONArray("selectionHistory")
+            ?.let { array -> rangesFromInts((0 until array.length()).map { array.optInt(it, -1) }) }
+            .orEmpty(),
     )
 
     private companion object {

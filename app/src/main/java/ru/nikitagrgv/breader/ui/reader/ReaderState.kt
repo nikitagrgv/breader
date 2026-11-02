@@ -17,6 +17,7 @@ sealed interface ReaderState {
         val content: BookContent,
         /** Where to start when the book is shown for the first time. */
         val initialPosition: ReadingPosition,
+        val history: SelectionHistoryState,
     ) : ReaderState
 
     data class Failed(val bookId: String, val title: String) : ReaderState

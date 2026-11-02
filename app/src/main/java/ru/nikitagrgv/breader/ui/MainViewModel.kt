@@ -34,6 +34,7 @@ import ru.nikitagrgv.breader.data.SettingsRepository
 import ru.nikitagrgv.breader.data.TranslationSettings
 import ru.nikitagrgv.breader.format.BookContent
 import ru.nikitagrgv.breader.ui.reader.ReaderState
+import ru.nikitagrgv.breader.ui.reader.SelectionHistoryState
 import ru.nikitagrgv.breader.ui.reader.bookId
 import java.io.Closeable
 
@@ -187,10 +188,11 @@ class MainViewModel(
                 (content as? Closeable)?.close()
                 throw e
             }
-            // The passed book may be stale by now, take the latest saved position.
-            val position = library.value?.books?.find { it.id == book.id }?.position ?: book.position
+            // The passed book may be stale by now, take what was saved last.
+            val latest = library.value?.books?.find { it.id == book.id } ?: book
+            val history = SelectionHistoryState(latest.selectionHistory) { repository.updateSelectionHistory(book.id, it) }
             setReader(
-                content?.let { ReaderState.Ready(book.id, book.title, it, position) }
+                content?.let { ReaderState.Ready(book.id, book.title, it, latest.position, history) }
                     ?: ReaderState.Failed(book.id, book.title),
             )
         }

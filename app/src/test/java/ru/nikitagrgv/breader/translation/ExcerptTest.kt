@@ -1,7 +1,9 @@
 package ru.nikitagrgv.breader.translation
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import ru.nikitagrgv.breader.format.Paragraph
 
@@ -15,6 +17,31 @@ class ExcerptTest {
 
     private fun excerpt(start: TextPosition, end: TextPosition, words: Int) =
         BookSelection(paragraphs, start, end).excerpt(words)
+
+    @Test
+    fun `a range is found in the book`() {
+        val range = BookRange(TextPosition(0, 4), TextPosition(2, 4))
+        assertEquals(range, range.inBook(paragraphs)?.range)
+    }
+
+    @Test
+    fun `a range that isn't in the book any more isn't found`() {
+        fun position(paragraph: Int, offset: Int) = TextPosition(paragraph, offset)
+        assertNull(BookRange(position(0, 0), position(4, 1)).inBook(paragraphs))
+        assertNull(BookRange(position(5, 0), position(5, 1)).inBook(paragraphs))
+        assertNull(BookRange(position(0, 15), position(2, 1)).inBook(paragraphs))
+        assertNull(BookRange(position(0, 0), position(0, 15)).inBook(paragraphs))
+        assertNull(BookRange(position(0, 3), position(0, 3)).inBook(paragraphs))
+    }
+
+    @Test
+    fun `ranges touch when they overlap or are next to each other`() {
+        fun range(start: Int, end: Int) = BookRange(TextPosition(0, start), TextPosition(0, end))
+        assertTrue(range(0, 5).touches(range(3, 8)))
+        assertTrue(range(0, 5).touches(range(5, 8)))
+        assertTrue(range(5, 8).touches(range(0, 5)))
+        assertFalse(range(0, 5).touches(range(6, 8)))
+    }
 
     @Test
     fun `part of a paragraph is found within one paragraph`() {

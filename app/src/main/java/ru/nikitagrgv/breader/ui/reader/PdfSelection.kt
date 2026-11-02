@@ -8,6 +8,7 @@ import ru.nikitagrgv.breader.format.Paragraph
 import ru.nikitagrgv.breader.format.PdfBook
 import ru.nikitagrgv.breader.format.PdfPageText
 import ru.nikitagrgv.breader.format.PdfRect
+import ru.nikitagrgv.breader.translation.BookRange
 import ru.nikitagrgv.breader.translation.BookSelection
 import ru.nikitagrgv.breader.translation.TextPosition
 
@@ -40,6 +41,7 @@ internal class PdfSelection(val book: PdfBook) : ReaderSelection {
     var range by mutableStateOf<PdfTextRange?>(null)
         private set
 
+    override val paragraphs: List<Paragraph> get() = book.paragraphs
     override val hasSelection: Boolean get() = range != null
     override val text: String get() = locate()?.excerpt(contextWords = 0)?.fragment.orEmpty()
 
@@ -51,6 +53,18 @@ internal class PdfSelection(val book: PdfBook) : ReaderSelection {
 
     fun select(range: PdfTextRange) {
         this.range = range
+    }
+
+    /** The pages may not have been read yet; the context of a selection comes from the neighboring ones as well. */
+    override suspend fun prepare(range: BookRange) {
+        for (page in (range.start.paragraph - 1)..(range.end.paragraph + 1)) {
+            if (page in book.pageSizes.indices) book.text(page)
+        }
+    }
+
+    override fun select(target: BookSelection, partly: Boolean): Boolean {
+        select(PdfTextRange(target.start, target.end))
+        return true
     }
 
     fun moveEnd(isStart: Boolean, to: TextPosition) {

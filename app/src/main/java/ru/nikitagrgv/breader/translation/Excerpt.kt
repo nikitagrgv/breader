@@ -7,8 +7,24 @@ data class TextPosition(val paragraph: Int, val offset: Int) : Comparable<TextPo
     override fun compareTo(other: TextPosition): Int = compareValuesBy(this, other, TextPosition::paragraph, TextPosition::offset)
 }
 
+/** A range of the book text; [end] is exclusive. */
+data class BookRange(val start: TextPosition, val end: TextPosition) {
+    /** Whether they overlap or are right next to each other. */
+    fun touches(other: BookRange): Boolean = start <= other.end && other.start <= end
+
+    /** This range in the text of a book; null if there's no such place, as when the file has changed since. */
+    fun inBook(paragraphs: List<Paragraph>): BookSelection? {
+        if (start >= end || start.paragraph !in paragraphs.indices || end.paragraph !in paragraphs.indices) return null
+        if (start.offset !in 0..paragraphs[start.paragraph].text.length) return null
+        if (end.offset !in 0..paragraphs[end.paragraph].text.length) return null
+        return BookSelection(paragraphs, start, end)
+    }
+}
+
 /** A selected range of the book text; [end] is exclusive. */
 class BookSelection(val paragraphs: List<Paragraph>, val start: TextPosition, val end: TextPosition) {
+    val range: BookRange get() = BookRange(start, end)
+
     /** The selected text with up to [contextWords] words before and after it, which may come from other paragraphs. */
     fun excerpt(contextWords: Int): Excerpt {
         val fragment = buildString {

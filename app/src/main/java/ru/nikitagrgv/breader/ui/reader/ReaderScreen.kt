@@ -87,12 +87,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextIndent
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChangedBy
+import kotlinx.coroutines.flow.filterNot
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import ru.nikitagrgv.breader.R
 import ru.nikitagrgv.breader.data.ReadingPosition
@@ -249,15 +252,24 @@ private fun BookText(
     // The position (0..1) the seek bar is dragged to; null while it isn't touched.
     var seekFraction by remember { mutableStateOf<Float?>(null) }
     var topBarHeight by remember { mutableIntStateOf(0) }
+    // The last ones known, for telling what the selection bars are likely to cover.
+    var previewHeight by remember { mutableIntStateOf(0) }
+    var selectionBarHeight by remember { mutableIntStateOf(0) }
     val context = LocalContext.current
     val clipboard = LocalClipboard.current
+    val density = LocalDensity.current
     val scope = rememberCoroutineScope()
+    val history = state.history
+    val walker = remember(history, selection, listState, viewport, fade, scope) {
+        SelectionHistoryWalker(history, selection, listState, viewport, fade, scope)
+    }
 
     val currentOnToggleChrome by rememberUpdatedState(onToggleChrome)
     val currentOnHideChrome by rememberUpdatedState(onHideChrome)
     val currentOnPositionChange by rememberUpdatedState(onPositionChange)
     val currentOnSelectionChange by rememberUpdatedState(onSelectionChange)
     fun savePosition() {
+        if (history.holdsPosition) return
         val currentProgress = progress ?: return
         val position = ReadingPosition(
             paragraph = listState.firstVisibleItemIndex,
@@ -277,14 +289,27 @@ private fun BookText(
         selection.clear()
     }
 
+    /** The part of the screen that's left for the text with a selection on it, in px. */
+    fun freeArea(): IntRange {
+        val top = maxOf(previewHeight, if (chromeVisible) topBarHeight else 0)
+        val bottom = with(density) {
+            (if (selectionBarHeight > 0) selectionBarHeight else SELECTION_BAR_USUAL_HEIGHT.roundToPx()) +
+                contentPadding.calculateBottomPadding().roundToPx() + SELECTED_LINE_ROOM.roundToPx()
+        }
+        return top..(listState.layoutInfo.viewportSize.height - bottom)
+    }
+
     ReadingTimeTracker(onReadingTime)
-    SelectionFadeEffect(fade, dialogOpen, selectionFadeMs, hasSelection)
+    SelectionFadeEffect(fade, dialogOpen, selectionFadeMs)
 
     // The bars only get in the way while reading, so they're hidden once the user drags the text
-    // (jumps made with the seek bar don't count).
+    // (jumps made with the seek bar don't count). It also means reading on from wherever the text is now.
     LaunchedEffect(listState) {
         listState.interactionSource.interactions.collect {
-            if (it is DragInteraction.Start) currentOnHideChrome()
+            if (it is DragInteraction.Start) {
+                currentOnHideChrome()
+                history.holdsPosition = false
+            }
         }
     }
     // The position is stored once scrolling or seeking settles.
@@ -302,14 +327,22 @@ private fun BookText(
         onDispose { savePosition() }
     }
     // Every change is reported: whoever translates the selection waits for it to settle.
-    LaunchedEffect(selection) {
+    LaunchedEffect(selection, walker) {
         try {
-            snapshotFlow { selection.locate() }
+            snapshotFlow { walker.isSelectionOnItsWay to selection.locate() }
+                // The moment between two selections isn't worth making everything about the selection go away.
+                .filterNot { (onItsWay, located) -> onItsWay && located == null }
+                .map { (_, located) -> located }
                 .distinctUntilChangedBy { it?.start to it?.end }
-                .collect { currentOnSelectionChange(it) }
+                .collect { located ->
+                    currentOnSelectionChange(located)
+                    // A new selection is where the reader is now.
+                    if (history.onSelectionChange(located?.range)) fade.place = null
+                }
         } finally {
             // The selection goes away with the text, e.g. when another tab is opened.
             currentOnSelectionChange(null)
+            history.onSelectionChange(null)
         }
     }
     // Translated anew, or only looked up in the dictionaries, without selecting it again.
@@ -363,7 +396,10 @@ private fun BookText(
             topBarHeight = with(LocalDensity.current) { topBarHeight.toDp() },
             bottomBarHeight = contentPadding.calculateBottomPadding(),
             fraction = seekFraction ?: progress ?: 0f,
-            onSeek = { seekFraction = it },
+            onSeek = {
+                seekFraction = it
+                history.holdsPosition = false
+            },
             onSeekFinished = { seekFraction = null },
         )
 
@@ -379,12 +415,20 @@ private fun BookText(
             exit = fadeOut() + slideOutVertically { -it },
             modifier = Modifier.align(Alignment.TopCenter),
         ) {
-            (translationPreview ?: lastPreview.value)?.let { TranslationPreview(it, Modifier.heightIn(max = previewMaxHeight)) }
+            (translationPreview ?: lastPreview.value)?.let {
+                TranslationPreview(
+                    state = it,
+                    cornerSpace = DpSize(SelectionHistoryButtonsWidth, HISTORY_BUTTONS_ROW_HEIGHT),
+                    modifier = Modifier
+                        .heightIn(max = previewMaxHeight)
+                        .onSizeChanged { size -> previewHeight = size.height },
+                )
+            }
         }
 
         // Above the navigation bar while it's shown; contentPadding has its height.
         AnimatedVisibility(
-            visible = hasSelection,
+            visible = hasSelection || walker.isSelectionOnItsWay,
             enter = fadeIn() + slideInVertically { it },
             exit = fadeOut() + slideOutVertically { it },
             modifier = Modifier
@@ -412,6 +456,28 @@ private fun BookText(
                 onAutoTranslateChange = onAutoTranslateChange,
                 onLookUp = { openDialog(onLookUp) },
                 onGrammar = { openDialog(onGrammar) },
+                modifier = Modifier.onSizeChanged { selectionBarHeight = it.height },
+            )
+        }
+
+        // Over everything else at the top, which keeps clear of them, so that they stay in the same place all the time.
+        // Hidden while just reading: a tap brings them along with the bars.
+        AnimatedVisibility(
+            visible = chromeVisible || hasSelection || walker.isSelectionOnItsWay,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier
+                .align(AbsoluteAlignment.TopRight)
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Right))
+                .absolutePadding(right = 4.dp, top = 2.dp),
+        ) {
+            val walk = history.history
+            SelectionHistoryButtons(
+                stepsBack = walk.stepsBack,
+                stepsForward = walk.stepsForward,
+                onBack = { walker.walk(history.history.back(), selectionFadeMs, freeArea()) },
+                onForward = { walker.walk(history.history.forward(), selectionFadeMs, freeArea()) },
+                onReturn = { walker.walk(history.history.toHome(), selectionFadeMs, freeArea()) },
             )
         }
     }
@@ -533,6 +599,15 @@ private fun BoxScope.SeekBarOverlay(
 }
 
 private const val MAX_BLANK_LINES = 2
+
+/** The height of the bar of actions on the selection before it's first shown. */
+private val SELECTION_BAR_USUAL_HEIGHT = 120.dp
+
+/** How far from the bottom of the free area a selection's first line still counts as being in it. */
+private val SELECTED_LINE_ROOM = 48.dp
+
+/** What's next to the buttons going through the selections has to be this high for them to stay on it. */
+private val HISTORY_BUTTONS_ROW_HEIGHT = 48.dp
 
 /** About 70 characters: an average character with the spaces is half the font size wide. */
 private const val MAX_LINE_EMS = 35f
@@ -659,7 +734,8 @@ private fun ReaderTopBar(title: String, position: String?, readingTimeMs: Long, 
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                // The buttons going through the selections are shown over the right end.
+                .absolutePadding(left = 16.dp, right = 16.dp + SelectionHistoryButtonsWidth, top = 12.dp, bottom = 12.dp),
         ) {
             Text(
                 text = title,

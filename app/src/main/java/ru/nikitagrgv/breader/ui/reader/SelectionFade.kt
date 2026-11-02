@@ -16,8 +16,8 @@ import ru.nikitagrgv.breader.translation.BookSelection
 internal val SelectionFadeColor = Color(0xFFFF9800).copy(alpha = 0.6f)
 
 /**
- * Where the selection was when a dialog about it took it away. The place is marked while the dialog is open and fades
- * out after that, so that the place in the book isn't lost.
+ * Where the selection was when something took it away: a dialog about it, or going on to another one in the history.
+ * The place is marked while the dialog is open and fades out after that, so that the place in the book isn't lost.
  */
 @Stable
 internal class SelectionFade {
@@ -43,13 +43,9 @@ internal class SelectionFade {
  * it can be noticed. If no dialog gets opened after all, the place just fades out.
  */
 @Composable
-internal fun SelectionFadeEffect(fade: SelectionFade, dialogOpen: Boolean, durationMs: Int, hasSelection: Boolean) {
+internal fun SelectionFadeEffect(fade: SelectionFade, dialogOpen: Boolean, durationMs: Int) {
     val place = fade.place
     LaunchedEffect(place, dialogOpen) {
         if (place != null) fade.show(dialogOpen, durationMs)
-    }
-    // A new selection is where the reader is now.
-    LaunchedEffect(hasSelection) {
-        if (hasSelection) fade.place = null
     }
 }

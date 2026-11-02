@@ -3,7 +3,9 @@ package ru.nikitagrgv.breader.ui.reader
 import androidx.compose.foundation.text.selection.SelectionState
 import androidx.compose.runtime.saveable.SaverScope
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextRange
 import ru.nikitagrgv.breader.format.Paragraph
+import ru.nikitagrgv.breader.translation.BookRange
 import ru.nikitagrgv.breader.translation.BookSelection
 import ru.nikitagrgv.breader.translation.TextPosition
 
@@ -16,20 +18,59 @@ internal sealed interface ReaderSelection {
     /** The selected text; the parts in different paragraphs are on different lines. */
     val text: String
 
+    val paragraphs: List<Paragraph>
+
     /** Where the selection is in the book; null if there's no selection or it isn't in the book text. */
     fun locate(): BookSelection?
 
     fun clear()
+
+    /** Gets ready for selecting [range], which is about to be asked for. */
+    suspend fun prepare(range: BookRange) {}
+
+    /**
+     * Selects [target], which may have to be on the screen for that.
+     * @param partly whether to select as much of it as can be, if not all of it can.
+     * @return whether all of it is selected.
+     */
+    fun select(target: BookSelection, partly: Boolean): Boolean
 }
 
 /** The selection in text laid out by the reader. */
-internal class TextSelection(val state: SelectionState, private val paragraphs: List<Paragraph>) : ReaderSelection {
+internal class TextSelection(val state: SelectionState, override val paragraphs: List<Paragraph>) : ReaderSelection {
     override val hasSelection: Boolean get() = state.selectedTexts.any { it.isNotEmpty() }
     override val text: String get() = state.selectedTexts.joinToString("\n") { it.text }
 
     override fun locate(): BookSelection? = state.locate(paragraphs)
 
     override fun clear() = state.clear()
+
+    /** Only the paragraphs that are composed can be selected, which is the ones on the screen. */
+    override fun select(target: BookSelection, partly: Boolean): Boolean {
+        val range = rangeAmongTexts(state.getSelectableTexts(), target.range, partly) ?: return false
+        state.select(range)
+        return locate()?.range == target.range
+    }
+}
+
+/**
+ * Where [range] of the book is in [texts] taken as one long text, which is how [SelectionState.select] wants it.
+ * @param texts the paragraphs at hand, from [SelectionState.getSelectableTexts].
+ * @param partly whether it's enough for the start of it to be there, with the rest cut off.
+ * @return null if it isn't there.
+ */
+internal fun rangeAmongTexts(texts: List<AnnotatedString>, range: BookRange, partly: Boolean): TextRange? {
+    var start = -1
+    var end = -1
+    var length = 0
+    for (text in texts) {
+        val paragraph = text.paragraphIndex()
+        if (paragraph == range.start.paragraph) start = length + range.start.offset
+        if (paragraph == range.end.paragraph) end = length + range.end.offset
+        length += text.length
+    }
+    if (start < 0 || (end < 0 && !partly)) return null
+    return TextRange(start, if (end < 0) length else end)
 }
 
 /**
