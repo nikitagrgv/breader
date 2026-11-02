@@ -5,10 +5,8 @@
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <!-- Dictionaries can be downloaded again, and would take most of the 25 MB backup quota. -->
+        <exclude domain="file" path="dictionaries/" />
     </cloud-backup>
     <!--
     <device-transfer>

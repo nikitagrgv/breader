@@ -1,3 +1,211 @@
 <resources>
     <string name="app_name">Breader</string>
+
+    <string name="tab_library">Library</string>
+    <string name="tab_reader">Reading</string>
+    <string name="tab_favorites">Favorites</string>
+    <string name="tab_settings">Settings</string>
+
+    <string name="library_title">Library</string>
+    <string name="library_empty">Your library is empty.\nAdd EPUB, FB2 or TXT books with the + button.</string>
+    <string name="add_books">Add books</string>
+    <string name="book_options">More options</string>
+    <string name="remove_from_library">Remove from library</string>
+    <string name="book_removed">“%1$s” removed</string>
+    <string name="undo">Undo</string>
+    <string name="import_failed">Couldn\'t add: %1$s</string>
+    <string name="import_duplicates">Already in the library: %1$s</string>
+
+    <string name="reader_no_book">No book is open</string>
+    <string name="reader_no_book_hint">Pick a book in the library.</string>
+    <string name="reader_failed">Couldn\'t open “%1$s”</string>
+    <string name="reader_failed_hint">The file may have been moved or deleted.</string>
+    <string name="open_library">Open library</string>
+
+    <string name="progress_percent">%1$.1f%%</string>
+    <string name="book_position">Position in the book</string>
+    <string name="copy">Copy</string>
+    <string name="translate">Translate</string>
+    <string name="dictionary">Dictionary</string>
+    <string name="from_dictionary">From the dictionary</string>
+    <string name="grammar">Grammar</string>
+    <string name="translation_options">Translation options</string>
+    <string name="quick_translation">Quick translation</string>
+    <string name="more_actions">More actions</string>
+    <string name="fewer_actions">Fewer actions</string>
+    <string name="add_to_favorites">Add to favorites</string>
+    <string name="remove_from_favorites">Remove from favorites</string>
+    <string name="copied">Copied</string>
+
+    <string name="settings_title">Settings</string>
+    <string name="settings_theme">Theme</string>
+    <string name="theme_dark">Dark</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_black">Black</string>
+    <string name="theme_sepia">Sepia</string>
+    <string name="settings_text">Text</string>
+    <string name="font">Font</string>
+    <string name="font_sans">Sans</string>
+    <string name="font_sans_summary">The system font, plain and compact.</string>
+    <string name="font_serif">Serif</string>
+    <string name="font_serif_summary">The system serif, like printed books.</string>
+    <string name="font_literata">Literata</string>
+    <string name="font_literata_summary">A serif made for reading e-books, by Google for Play Books.</string>
+    <string name="font_atkinson">Atkinson</string>
+    <string name="font_atkinson_summary">Atkinson Hyperlegible, with letters that are hard to confuse; made by the Braille Institute for low vision. Latin letters only.</string>
+    <string name="font_size">Font size</string>
+    <string name="font_size_value">%1$d sp</string>
+    <string name="line_spacing">Line spacing</string>
+    <string name="line_spacing_value">%1$.1f×</string>
+    <string name="line_spacing_summary">More space between lines makes them easier to tell apart, especially with dyslexia or low vision.</string>
+    <string name="margins">Margins</string>
+    <string name="margins_value">%1$d dp</string>
+    <string name="margins_summary">Space at the sides of the text. On wide screens, there\'s more of it: lines longer than about 70 characters are hard to follow.</string>
+    <string name="justify">Justify text</string>
+    <string name="justify_summary">Stretch the spaces so that lines end evenly at the right edge. Android shows the selection shifted on such lines, the more the further right.</string>
+    <string name="hyphenation">Hyphenation</string>
+    <string name="hyphenation_summary">Split long words at the end of a line. When off, lines break between whole words.</string>
+    <string name="text_preview">Justification stretches the spaces between words, so that every line ends at the right edge, and hyphenation splits extraordinarily long words to keep those spaces small.</string>
+
+    <string name="settings_seek_bar">Scroll bar</string>
+    <string name="seek_bar_summary">Where the bar for jumping through the book is, when the bars are shown.</string>
+    <string name="position_left">Left</string>
+    <string name="position_right">Right</string>
+    <string name="position_top">Top</string>
+    <string name="position_bottom">Bottom</string>
+
+    <string name="settings_translation">Translation</string>
+    <string name="openrouter_key">OpenRouter API key</string>
+    <string name="openrouter_key_hint">Get one at &lt;a href="https://openrouter.ai/keys"&gt;openrouter.ai/keys&lt;/a&gt;</string>
+    <string name="show_key">Show key</string>
+    <string name="hide_key">Hide key</string>
+    <string name="source_language">Translate from</string>
+    <string name="source_language_auto">Detect</string>
+    <string name="target_language">Translate into</string>
+    <string name="languages_hint">Leave empty to detect the book language and to translate into %1$s, the device language.</string>
+    <string name="translation_models">Models</string>
+    <string name="translation_models_none">None picked. All the picked models are asked at once.</string>
+    <string name="context_words">Context</string>
+    <plurals name="context_words_value">
+        <item quantity="one">%1$d word on each side</item>
+        <item quantity="other">%1$d words on each side</item>
+    </plurals>
+    <string name="context_words_summary">Text around the selection sent along with it, so the right meaning is picked.</string>
+    <string name="auto_translate">Translate on selection</string>
+    <string name="auto_translate_summary">Ask the models as soon as text is selected and show their translations at the top. When off, only the dictionaries and the cached translations are shown, which cost no requests. Also switched by a long press on the Translate button.</string>
+    <string name="translation_cache">Cache</string>
+    <string name="translation_cache_off">Off</string>
+    <plurals name="translation_cache_value">
+        <item quantity="one">%1$d fragment</item>
+        <item quantity="other">%1$d fragments</item>
+    </plurals>
+    <string name="translation_cache_summary">Translations of the recently selected fragments are kept, so selecting one again shows them at once. A fragment with a different context or language is translated anew.</string>
+    <plurals name="translation_cache_used">
+        <item quantity="one">%1$d fragment saved</item>
+        <item quantity="other">%1$d fragments saved</item>
+    </plurals>
+    <string name="clear_cache">Clear cache</string>
+
+    <string name="models_title">Translation models</string>
+    <plurals name="models_selected">
+        <item quantity="one">%1$d picked</item>
+        <item quantity="other">%1$d picked</item>
+    </plurals>
+    <string name="save">Save</string>
+    <string name="close">Close</string>
+    <string name="search_models">Search models</string>
+    <string name="clear_search">Clear search</string>
+    <string name="sort_price">Cheapest</string>
+    <string name="sort_popularity">Popular</string>
+    <string name="sort_intelligence">Smartest</string>
+    <string name="sort_speed">Fastest</string>
+    <string name="sort_newest">Newest</string>
+    <string name="filter_free">Free</string>
+    <string name="filter_selected">Picked</string>
+    <string name="price_free">Free</string>
+    <string name="price_per_million">$%1$s in · $%2$s out per 1M tokens</string>
+    <string name="price_unknown">Price depends on the routed model</string>
+    <string name="models_failed">Couldn\'t load the models. Check the connection.</string>
+    <string name="models_empty">No models match.</string>
+    <string name="retry">Retry</string>
+
+    <string name="translation_setup_needed">To translate, add an OpenRouter API key and pick models in the settings.</string>
+    <string name="open_settings">Open settings</string>
+    <string name="grammar_setup_needed">To explain grammar, add an OpenRouter API key and pick models in the settings.</string>
+    <string name="grammar_waiting">Waiting for %1$s</string>
+    <string name="translation_alternatives">Also</string>
+    <string name="translation_notes">Notes</string>
+    <plurals name="translation_waiting">
+        <item quantity="one">Waiting for %2$s</item>
+        <item quantity="other">Waiting for %1$d models: %2$s</item>
+    </plurals>
+    <string name="translation_progress">%1$d/%2$d</string>
+    <plurals name="translation_failed">
+        <item quantity="one">%1$d failed</item>
+        <item quantity="other">%1$d failed</item>
+    </plurals>
+    <string name="error_invalid_key">Invalid API key</string>
+    <string name="error_no_credits">Not enough credits on the OpenRouter account</string>
+    <string name="error_rate_limited">Rate-limited, try again later</string>
+    <string name="error_timeout">No reply in time</string>
+    <string name="error_network">No connection</string>
+    <string name="error_bad_reply">The reply has no translation</string>
+    <string name="error_unknown">Unknown error</string>
+
+    <string name="dictionaries_title">Dictionaries</string>
+    <string name="manage_dictionaries">Manage dictionaries</string>
+    <string name="dictionaries_summary_none">None downloaded. Download dictionaries to look up words offline.</string>
+    <plurals name="dictionaries_summary">
+        <item quantity="one">%1$d downloaded</item>
+        <item quantity="other">%1$d downloaded</item>
+    </plurals>
+    <string name="dictionaries_downloaded">Downloaded</string>
+    <string name="dictionaries_available">Download</string>
+    <string name="dictionaries_edition_summary">Pick the language the words are explained in, then the language of the words.</string>
+    <string name="dictionary_edition">%1$s Wiktionary</string>
+    <string name="dictionaries_search">Search languages</string>
+    <string name="dictionaries_languages_failed">Couldn\'t load the languages. Check the connection.</string>
+    <string name="dictionaries_languages_empty">No languages match.</string>
+    <string name="dictionaries_attribution">The dictionaries are made from Wiktionary by kaikki.org and are available under the CC BY-SA 4.0 license.</string>
+    <plurals name="dictionary_senses">
+        <item quantity="one">%1$s meaning</item>
+        <item quantity="other">%1$s meanings</item>
+    </plurals>
+    <plurals name="dictionary_words">
+        <item quantity="one">%1$s word</item>
+        <item quantity="other">%1$s words</item>
+    </plurals>
+    <string name="dictionary_info">%1$s Wiktionary · %2$s · %3$s</string>
+    <string name="dictionary_download">Download</string>
+    <string name="dictionary_remove">Remove</string>
+    <string name="cancel">Cancel</string>
+    <string name="dictionary_downloading">Downloading: %1$s of %2$s</string>
+    <string name="dictionary_downloading_unknown">Downloading: %1$s</string>
+    <string name="dictionary_downloading_edition">This language isn\'t available separately, so the whole Wiktionary is downloaded: %1$s of %2$s</string>
+    <string name="dictionary_indexing">Finishing…</string>
+    <string name="dictionary_error_network">Couldn\'t download. Check the connection.</string>
+    <string name="dictionary_error_not_found">Not available for download anymore.</string>
+    <string name="dictionary_error_empty">The download has no words in this language.</string>
+    <string name="dictionary_error_too_big">This language isn\'t available separately, and the whole Wiktionary is too big to download.</string>
+    <string name="dictionary_error_other">Couldn\'t make the dictionary.</string>
+    <string name="dictionary_source">%1$s · %2$s Wiktionary</string>
+    <string name="dictionary_nothing_found">The dictionaries have nothing for it.</string>
+    <string name="dictionary_none_downloaded">No dictionaries are downloaded.</string>
+
+    <string name="favorites_title">Favorites</string>
+    <string name="favorites_empty">No favorites yet.\nSelect a word in a book and tap the star to keep it here.</string>
+    <string name="favorite_not_found">The dictionaries have nothing for it, so it can\'t be kept.</string>
+    <string name="favorites_need_dictionary">Favorites are words from the dictionaries. Download one in the settings first.</string>
+    <string name="favorite_remove_title">Remove “%1$s” from the favorites?</string>
+    <plurals name="favorites_remove_title">
+        <item quantity="one">Remove %1$d word from the favorites?</item>
+        <item quantity="other">Remove %1$d words from the favorites?</item>
+    </plurals>
+    <plurals name="favorites_selected">
+        <item quantity="one">%1$d selected</item>
+        <item quantity="other">%1$d selected</item>
+    </plurals>
+    <string name="remove">Remove</string>
+    <string name="select">Select</string>
+    <string name="select_all">Select all</string>
 </resources>
