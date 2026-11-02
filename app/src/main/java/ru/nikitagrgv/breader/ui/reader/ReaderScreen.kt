@@ -59,6 +59,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.AbsoluteAlignment
@@ -95,9 +96,11 @@ import ru.nikitagrgv.breader.R
 import ru.nikitagrgv.breader.data.ReadingPosition
 import ru.nikitagrgv.breader.data.favoriteKey
 import ru.nikitagrgv.breader.data.SeekBarPosition
+import ru.nikitagrgv.breader.format.BookContent
 import ru.nikitagrgv.breader.format.InlineStyle
 import ru.nikitagrgv.breader.format.Paragraph
 import ru.nikitagrgv.breader.format.ParagraphKind
+import ru.nikitagrgv.breader.format.PdfBook
 import ru.nikitagrgv.breader.translation.BookSelection
 import ru.nikitagrgv.breader.ui.translation.TranslationPreview
 import ru.nikitagrgv.breader.ui.translation.TranslationState
@@ -220,17 +223,16 @@ private fun BookText(
     onMoreSelectionActionsChange: (Boolean) -> Unit,
 ) {
     val paragraphs = state.content.paragraphs
-    val looks = rememberParagraphLooks(settings)
-    val blankLine = with(LocalDensity.current) { settings.fontSize.toDp() } * settings.lineHeight
     // Saveable, so the position survives switching tabs and configuration changes.
     val listState = rememberLazyListState(state.initialPosition.paragraph, state.initialPosition.offset)
+    val viewport = rememberSaveable(saver = PdfViewport.Saver) {
+        PdfViewport(state.initialPosition.zoom, state.initialPosition.pan.toFloat())
+    }
     val progress by remember(listState) { derivedStateOf { listState.readingProgress() } }
     // Not saveable on purpose: a restored selection would refer to texts that are composed anew.
-    val selectionState = remember { SelectionState() }
-    val hasSelection by remember(selectionState) {
-        derivedStateOf { selectionState.selectedTexts.any { it.isNotEmpty() } }
-    }
-    val selectedText by remember(selectionState) { derivedStateOf { selectionState.selectedText() } }
+    val selection = remember(state.content) { selectionIn(state.content) }
+    val hasSelection by remember(selection) { derivedStateOf { selection.hasSelection } }
+    val selectedText by remember(selection) { derivedStateOf { selection.text } }
     // The position (0..1) the seek bar is dragged to; null while it isn't touched.
     var seekFraction by remember { mutableStateOf<Float?>(null) }
     var topBarHeight by remember { mutableIntStateOf(0) }
@@ -244,7 +246,12 @@ private fun BookText(
     val currentOnSelectionChange by rememberUpdatedState(onSelectionChange)
     fun savePosition() {
         val currentProgress = progress ?: return
-        val position = ReadingPosition(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
+        val position = ReadingPosition(
+            paragraph = listState.firstVisibleItemIndex,
+            offset = listState.firstVisibleItemScrollOffset,
+            zoom = viewport.zoom,
+            pan = viewport.pan.roundToInt(),
+        )
         currentOnPositionChange(position, currentProgress)
     }
 
@@ -259,7 +266,7 @@ private fun BookText(
     }
     // The position is stored once scrolling or seeking settles.
     LaunchedEffect(listState) {
-        snapshotFlow { listState.isScrollInProgress || seekFraction != null }.collect { busy ->
+        snapshotFlow { listState.isScrollInProgress || seekFraction != null || viewport.isBusy }.collect { busy ->
             if (!busy) savePosition()
         }
     }
@@ -272,9 +279,9 @@ private fun BookText(
         onDispose { savePosition() }
     }
     // Every change is reported: whoever translates the selection waits for it to settle.
-    LaunchedEffect(selectionState, paragraphs) {
+    LaunchedEffect(selection) {
         try {
-            snapshotFlow { selectionState.locate(paragraphs) }
+            snapshotFlow { selection.locate() }
                 .distinctUntilChangedBy { it?.start to it?.end }
                 .collect { currentOnSelectionChange(it) }
         } finally {
@@ -284,49 +291,25 @@ private fun BookText(
     }
     // Translated anew, or only looked up in the dictionaries, without selecting it again.
     LaunchedEffect(autoTranslate) {
-        selectionState.locate(paragraphs)?.let { currentOnSelectionChange(it) }
+        selection.locate()?.let { currentOnSelectionChange(it) }
     }
 
-    // Lines much longer than 70 characters are hard to follow back to the start of the next one, so on wide
-    // screens (tablets, landscape) the text keeps to a column in the middle. Phones are narrower than that.
-    val density = LocalDensity.current
-    val windowWidth = with(density) { LocalWindowInfo.current.containerSize.width.toDp() }
-    val maxTextWidth = with(density) { settings.fontSize.toDp() } * MAX_LINE_EMS
-    val sideMargin = maxOf(settings.margins, (windowWidth - maxTextWidth) / 2)
-
     Box(Modifier.fillMaxSize()) {
-        CompositionLocalProvider(LocalTextContextMenuToolbarProvider provides NoTextContextMenu) {
-            SelectionContainer(state = selectionState, modifier = Modifier.fillMaxSize()) {
-                LazyColumn(
-                    state = listState,
-                    // Only the camera cutout is avoided: the system bars are hidden while reading.
-                    contentPadding = WindowInsets.displayCutout
-                        .add(WindowInsets(left = sideMargin, top = TEXT_VERTICAL_PADDING, right = sideMargin, bottom = TEXT_VERTICAL_PADDING))
-                        .asPaddingValues(),
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .pointerInput(Unit) {
-                            var hadSelection = false
-                            detectTapGestures(
-                                // A tap that clears the selection shouldn't toggle the bars as well.
-                                onPress = { hadSelection = hasSelection },
-                                onTap = { if (!hadSelection) currentOnToggleChrome() },
-                            )
-                        },
-                ) {
-                    items(count = paragraphs.size, contentType = { paragraphs[it].kind }) { index ->
-                        val paragraph = paragraphs[index]
-                        // Capped: some books stack many empty lines, which would leave half a screen empty.
-                        val blankLines = paragraph.blankLinesBefore.coerceAtMost(MAX_BLANK_LINES)
-                        ParagraphText(
-                            paragraph = paragraph,
-                            index = index,
-                            look = looks.getValue(paragraph.kind),
-                            modifier = if (blankLines > 0) Modifier.padding(top = blankLine * blankLines) else Modifier,
-                        )
-                    }
-                }
-            }
+        when (selection) {
+            is PdfSelection -> PdfPages(
+                selection = selection,
+                listState = listState,
+                viewport = viewport,
+                onToggleChrome = onToggleChrome,
+                onHideChrome = onHideChrome,
+            )
+            is TextSelection -> ParagraphList(
+                paragraphs = paragraphs,
+                settings = settings,
+                selection = selection,
+                listState = listState,
+                onToggleChrome = onToggleChrome,
+            )
         }
 
         AnimatedVisibility(
@@ -337,7 +320,13 @@ private fun BookText(
         ) {
             ReaderTopBar(
                 title = state.title,
-                progress = progress,
+                // Pages are what a PDF is made of, while in a book laid out by the reader they mean nothing.
+                position = if (selection is PdfSelection) {
+                    val page by remember(listState) { derivedStateOf { listState.middleItemIndex() + 1 } }
+                    stringResource(R.string.page_number, page, paragraphs.size)
+                } else {
+                    progress?.let { stringResource(R.string.progress_percent, it * 100) }
+                },
                 readingTimeMs = readingTimeMs,
                 modifier = Modifier.onSizeChanged { topBarHeight = it.height },
             )
@@ -381,33 +370,91 @@ private fun BookText(
                 moreOpen = moreSelectionActions,
                 onMoreOpenChange = onMoreSelectionActionsChange,
                 onCopy = {
-                    val text = selectionState.selectedText()
+                    val text = selection.text
                     scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText(null, text))) }
                     // Android 13+ confirms copying by itself.
                     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
                         Toast.makeText(context, R.string.copied, Toast.LENGTH_SHORT).show()
                     }
-                    selectionState.clear()
+                    selection.clear()
                 },
                 onTranslate = {
-                    selectionState.locate(paragraphs)?.let(onTranslate)
-                    selectionState.clear()
+                    selection.locate()?.let(onTranslate)
+                    selection.clear()
                 },
                 // The selection stays: the quick translation is shown for it, the star is filled for it.
-                onQuickTranslate = { selectionState.locate(paragraphs)?.let(onQuickTranslate) },
+                onQuickTranslate = { selection.locate()?.let(onQuickTranslate) },
                 favorite = favoriteKey(selectedText) in favoriteKeys,
-                onFavorite = { selectionState.locate(paragraphs)?.let(onFavorite) },
+                onFavorite = { selection.locate()?.let(onFavorite) },
                 autoTranslate = autoTranslate,
                 onAutoTranslateChange = onAutoTranslateChange,
                 onLookUp = {
-                    selectionState.locate(paragraphs)?.let(onLookUp)
-                    selectionState.clear()
+                    selection.locate()?.let(onLookUp)
+                    selection.clear()
                 },
                 onGrammar = {
-                    selectionState.locate(paragraphs)?.let(onGrammar)
-                    selectionState.clear()
+                    selection.locate()?.let(onGrammar)
+                    selection.clear()
                 },
             )
+        }
+    }
+}
+
+private fun selectionIn(content: BookContent): ReaderSelection =
+    if (content is PdfBook) PdfSelection(content) else TextSelection(SelectionState(), content.paragraphs)
+
+/** The text of a book laid out by the reader, by the settings. */
+@Composable
+private fun ParagraphList(
+    paragraphs: List<Paragraph>,
+    settings: ReaderSettings,
+    selection: TextSelection,
+    listState: LazyListState,
+    onToggleChrome: () -> Unit,
+) {
+    val looks = rememberParagraphLooks(settings)
+    val density = LocalDensity.current
+    val blankLine = with(density) { settings.fontSize.toDp() } * settings.lineHeight
+    val currentOnToggleChrome by rememberUpdatedState(onToggleChrome)
+
+    // Lines much longer than 70 characters are hard to follow back to the start of the next one, so on wide
+    // screens (tablets, landscape) the text keeps to a column in the middle. Phones are narrower than that.
+    val windowWidth = with(density) { LocalWindowInfo.current.containerSize.width.toDp() }
+    val maxTextWidth = with(density) { settings.fontSize.toDp() } * MAX_LINE_EMS
+    val sideMargin = maxOf(settings.margins, (windowWidth - maxTextWidth) / 2)
+
+    CompositionLocalProvider(LocalTextContextMenuToolbarProvider provides NoTextContextMenu) {
+        SelectionContainer(state = selection.state, modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                state = listState,
+                // Only the camera cutout is avoided: the system bars are hidden while reading.
+                contentPadding = WindowInsets.displayCutout
+                    .add(WindowInsets(left = sideMargin, top = TEXT_VERTICAL_PADDING, right = sideMargin, bottom = TEXT_VERTICAL_PADDING))
+                    .asPaddingValues(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(selection) {
+                        var hadSelection = false
+                        detectTapGestures(
+                            // A tap that clears the selection shouldn't toggle the bars as well.
+                            onPress = { hadSelection = selection.hasSelection },
+                            onTap = { if (!hadSelection) currentOnToggleChrome() },
+                        )
+                    },
+            ) {
+                items(count = paragraphs.size, contentType = { paragraphs[it].kind }) { index ->
+                    val paragraph = paragraphs[index]
+                    // Capped: some books stack many empty lines, which would leave half a screen empty.
+                    val blankLines = paragraph.blankLinesBefore.coerceAtMost(MAX_BLANK_LINES)
+                    ParagraphText(
+                        paragraph = paragraph,
+                        index = index,
+                        look = looks.getValue(paragraph.kind),
+                        modifier = if (blankLines > 0) Modifier.padding(top = blankLine * blankLines) else Modifier,
+                    )
+                }
+            }
         }
     }
 }
@@ -478,9 +525,6 @@ private class LastValue<T : Any> {
     var value: T? = null
 }
 
-/** Selected parts of the paragraphs, one per line. */
-private fun SelectionState.selectedText(): String = selectedTexts.joinToString("\n") { it.text }
-
 /** Suppresses the floating text toolbar: the reader shows [SelectionBar] instead. */
 private object NoTextContextMenu : TextContextMenuProvider {
     override suspend fun showTextContextMenu(dataProvider: TextContextMenuDataProvider) {
@@ -495,6 +539,13 @@ private fun LazyListState.readingProgress(): Float? {
         !canScrollForward -> 1f
         else -> firstVisibleItemIndex.toFloat() / total
     }
+}
+
+/** The item in the middle of the screen, which is what's being read when several are visible. */
+private fun LazyListState.middleItemIndex(): Int {
+    val layout = layoutInfo
+    val middle = (layout.viewportStartOffset + layout.viewportEndOffset) / 2
+    return layout.visibleItemsInfo.lastOrNull { it.offset <= middle }?.index ?: firstVisibleItemIndex
 }
 
 /** @param index the paragraph's index in the book, if it's from the book. */
@@ -565,7 +616,7 @@ private fun rememberParagraphLooks(settings: ReaderSettings): Map<ParagraphKind,
 }
 
 @Composable
-private fun ReaderTopBar(title: String, progress: Float?, readingTimeMs: Long, modifier: Modifier = Modifier) {
+private fun ReaderTopBar(title: String, position: String?, readingTimeMs: Long, modifier: Modifier = Modifier) {
     Surface(color = MaterialTheme.colorScheme.surfaceContainer, modifier = modifier.fillMaxWidth()) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -580,10 +631,9 @@ private fun ReaderTopBar(title: String, progress: Float?, readingTimeMs: Long, m
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
-            if (progress != null) {
-                val percent = stringResource(R.string.progress_percent, progress * 100)
+            if (position != null) {
                 Text(
-                    text = listOfNotNull(percent, formatReadingTime(readingTimeMs)).joinToString(" · "),
+                    text = listOfNotNull(position, formatReadingTime(readingTimeMs)).joinToString(" · "),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 16.dp),

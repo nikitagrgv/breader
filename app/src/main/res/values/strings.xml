@@ -7,7 +7,7 @@
     <string name="tab_settings">Settings</string>
 
     <string name="library_title">Library</string>
-    <string name="library_empty">Your library is empty.\nAdd EPUB, FB2 or TXT books with the + button.</string>
+    <string name="library_empty">Your library is empty.\nAdd EPUB, FB2, PDF or TXT books with the + button.</string>
     <string name="add_books">Add books</string>
     <string name="book_options">More options</string>
     <string name="remove_from_library">Remove from library</string>
@@ -23,6 +23,8 @@
     <string name="open_library">Open library</string>
 
     <string name="progress_percent">%1$.1f%%</string>
+    <string name="page_number">%1$d/%2$d</string>
+    <string name="pdf_page_no_text">This page has no text to select. It may be a scan.</string>
     <string name="book_position">Position in the book</string>
     <string name="copy">Copy</string>
     <string name="translate">Translate</string>

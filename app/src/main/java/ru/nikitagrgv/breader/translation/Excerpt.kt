@@ -3,7 +3,9 @@ package ru.nikitagrgv.breader.translation
 import ru.nikitagrgv.breader.format.Paragraph
 
 /** A place in the book text: a paragraph and a character offset in it. */
-data class TextPosition(val paragraph: Int, val offset: Int)
+data class TextPosition(val paragraph: Int, val offset: Int) : Comparable<TextPosition> {
+    override fun compareTo(other: TextPosition): Int = compareValuesBy(this, other, TextPosition::paragraph, TextPosition::offset)
+}
 
 /** A selected range of the book text; [end] is exclusive. */
 class BookSelection(val paragraphs: List<Paragraph>, val start: TextPosition, val end: TextPosition) {

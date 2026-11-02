@@ -9,6 +9,29 @@ import ru.nikitagrgv.breader.translation.TextPosition
 
 private const val PARAGRAPH_TAG = "paragraph"
 
+/** The selection in the open book, whichever way the book is shown. Reading it is observable. */
+internal sealed interface ReaderSelection {
+    val hasSelection: Boolean
+
+    /** The selected text; the parts in different paragraphs are on different lines. */
+    val text: String
+
+    /** Where the selection is in the book; null if there's no selection or it isn't in the book text. */
+    fun locate(): BookSelection?
+
+    fun clear()
+}
+
+/** The selection in text laid out by the reader. */
+internal class TextSelection(val state: SelectionState, private val paragraphs: List<Paragraph>) : ReaderSelection {
+    override val hasSelection: Boolean get() = state.selectedTexts.any { it.isNotEmpty() }
+    override val text: String get() = state.selectedTexts.joinToString("\n") { it.text }
+
+    override fun locate(): BookSelection? = state.locate(paragraphs)
+
+    override fun clear() = state.clear()
+}
+
 /**
  * Tags the whole text with the paragraph [index]. The tag stays on any selected part of the text,
  * which is how [locateSelection] finds the part's paragraph.

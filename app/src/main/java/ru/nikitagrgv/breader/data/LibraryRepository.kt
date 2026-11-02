@@ -168,6 +168,8 @@ class LibraryRepository(context: Context) {
         .put("addedAt", addedAt)
         .put("paragraph", position.paragraph)
         .put("offset", position.offset)
+        .put("zoom", position.zoom.toDouble())
+        .put("pan", position.pan)
         .put("progress", progress.toDouble())
         .put("readingTime", readingTimeMs)
 
@@ -179,7 +181,7 @@ class LibraryRepository(context: Context) {
         title = getString("title"),
         author = optString("author").ifEmpty { null },
         addedAt = getLong("addedAt"),
-        position = ReadingPosition(optInt("paragraph"), optInt("offset")),
+        position = ReadingPosition(optInt("paragraph"), optInt("offset"), optDouble("zoom", 1.0).toFloat(), optInt("pan")),
         progress = optDouble("progress", 0.0).toFloat(),
         readingTimeMs = optLong("readingTime"),
     )

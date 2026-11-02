@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.AP
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -31,8 +32,10 @@ import ru.nikitagrgv.breader.data.ReadingPosition
 import ru.nikitagrgv.breader.data.SeekBarPosition
 import ru.nikitagrgv.breader.data.SettingsRepository
 import ru.nikitagrgv.breader.data.TranslationSettings
+import ru.nikitagrgv.breader.format.BookContent
 import ru.nikitagrgv.breader.ui.reader.ReaderState
 import ru.nikitagrgv.breader.ui.reader.bookId
+import java.io.Closeable
 
 sealed interface LibraryEvent {
     data class ImportFinished(val failed: List<String>, val duplicates: List<String>) : LibraryEvent
@@ -105,7 +108,7 @@ class MainViewModel(
         val (index, removed) = repository.removeBook(book.id) ?: return
         if (_reader.value.bookId == book.id) {
             loadJob?.cancel()
-            _reader.value = ReaderState.Empty
+            setReader(ReaderState.Empty)
         }
         _events.trySend(LibraryEvent.BookRemoved(removed, index))
     }
@@ -157,26 +160,46 @@ class MainViewModel(
         viewModelScope.launch { settingsRepository.updateTranslation(transform) }
     }
 
+    override fun onCleared() {
+        closeContent(_reader.value)
+    }
+
     private fun load(book: Book) {
         loadJob?.cancel()
-        _reader.value = ReaderState.Loading(book.id, book.title)
+        setReader(ReaderState.Loading(book.id, book.title))
         loadJob = viewModelScope.launch {
-            val content = withContext(Dispatchers.IO) {
-                try {
-                    files.readContent(book)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to open ${book.uri}", e)
-                    null
+            var content: BookContent? = null
+            try {
+                withContext(Dispatchers.IO) {
+                    try {
+                        content = files.readContent(book)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to open ${book.uri}", e)
+                    }
                 }
+            } catch (e: CancellationException) {
+                // Another book was opened in the meantime, and nobody else knows about this one.
+                (content as? Closeable)?.close()
+                throw e
             }
             // The passed book may be stale by now, take the latest saved position.
             val position = library.value?.books?.find { it.id == book.id }?.position ?: book.position
-            _reader.value = if (content != null) {
-                ReaderState.Ready(book.id, book.title, content, position)
-            } else {
-                ReaderState.Failed(book.id, book.title)
-            }
+            setReader(
+                content?.let { ReaderState.Ready(book.id, book.title, it, position) }
+                    ?: ReaderState.Failed(book.id, book.title),
+            )
         }
+    }
+
+    private fun setReader(state: ReaderState) {
+        val previous = _reader.value
+        _reader.value = state
+        closeContent(previous)
+    }
+
+    /** A PDF stays open while it's read. */
+    private fun closeContent(state: ReaderState) {
+        ((state as? ReaderState.Ready)?.content as? Closeable)?.close()
     }
 
     companion object {

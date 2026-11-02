@@ -6,8 +6,16 @@ import ru.nikitagrgv.breader.format.BookFormat
 /**
  * Where the reader stopped: the first visible paragraph and the scroll offset inside it, in px.
  * The paragraph index stays valid when the font size changes; only the offset becomes approximate.
+ * In a PDF, the paragraphs are the pages.
  */
-data class ReadingPosition(val paragraph: Int = 0, val offset: Int = 0)
+data class ReadingPosition(
+    val paragraph: Int = 0,
+    val offset: Int = 0,
+    /** How much a PDF's pages are enlarged, from fitting the screen's width. */
+    val zoom: Float = 1f,
+    /** How far an enlarged PDF is moved sideways, in px. */
+    val pan: Int = 0,
+)
 
 data class Book(
     val id: String,
