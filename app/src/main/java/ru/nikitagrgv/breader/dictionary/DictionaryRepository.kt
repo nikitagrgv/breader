@@ -41,12 +41,23 @@ data class DictionaryInfo(
     val created: Long,
 )
 
-/** The entries one dictionary has for a looked up text. */
-data class DictionaryResult(val dictionary: DictionaryInfo, val entries: List<DictionaryEntry>)
+/** Where a [DictionaryResult] comes from. */
+sealed interface DictionarySource {
+    data class Downloaded(val info: DictionaryInfo) : DictionarySource
+    data class Online(val dictionary: OnlineDictionary) : DictionarySource
+}
 
-/** All the meanings in one line, as a brief translation; null if there are none. */
+/** The entries one dictionary has for a looked up text. */
+data class DictionaryResult(val source: DictionarySource, val entries: List<DictionaryEntry>)
+
+/**
+ * All the meanings in one line, as a brief translation; null if there are none. The explanations of the online
+ * Wiktionary are left out when there's anything else: they're long, and they don't translate.
+ */
 fun List<DictionaryResult>.meaningsLine(): String? =
-    flatMap { result -> result.entries.flatMap { entry -> entry.senses.map { it.gloss } } }
+    filter { (it.source as? DictionarySource.Online)?.dictionary?.explains != true }
+        .ifEmpty { this }
+        .flatMap { result -> result.entries.flatMap { entry -> entry.senses.map { it.gloss } } }
         .distinct()
         .joinToString("; ")
         .ifEmpty { null }
@@ -164,10 +175,25 @@ class DictionaryRepository(context: Context) {
                     val reader = readers[info.id] ?: return@mapNotNull null
                     lookupKeys(trimmed, info.languageCode)
                         .firstNotNullOfOrNull { keys -> reader.lookup(keys).ifEmpty { null } }
-                        ?.let { DictionaryResult(info, it) }
+                        ?.let { DictionaryResult(DictionarySource.Downloaded(info), it) }
                 }
                 Log.d(TAG, "Looked up \"$trimmed\" in ${SystemClock.elapsedRealtime() - start} ms")
                 results
+            }
+        }
+    }
+
+    /** Words of the downloaded dictionaries that start with [prefix], for completing what's being typed. */
+    suspend fun wordsStartingWith(prefix: String, limit: Int): List<String> {
+        val key = dictionaryKey(prefix)
+        if (key.isEmpty()) return emptyList()
+        return withContext(Dispatchers.IO) {
+            mutex.withLock {
+                _installed.value
+                    .flatMap { readers[it.id]?.wordsStartingWith(key, limit).orEmpty() }
+                    .distinctBy { dictionaryKey(it) }
+                    .sortedBy { dictionaryKey(it) }
+                    .take(limit)
             }
         }
     }
@@ -314,10 +340,11 @@ class DictionaryRepository(context: Context) {
         /** The Russian edition is about 300 MB; the English one is 3 GB, too much for a phone. */
         const val MAX_WHOLE_EDITION_BYTES = 600L * 1024 * 1024
 
-        /** Longer texts are sentences, not words or phrases that dictionaries have. */
-        const val MAX_LOOKUP_LENGTH = 60
     }
 }
+
+/** Longer texts are sentences, not words or phrases that dictionaries have. */
+internal const val MAX_LOOKUP_LENGTH = 60
 
 private class DownloadException(val error: DownloadError) : Exception(error.name)
 

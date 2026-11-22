@@ -18,6 +18,7 @@ internal val SelectionFadeColor = Color(0xFFFF9800).copy(alpha = 0.6f)
 /**
  * Where the selection was when something took it away: a dialog about it, or going on to another one in the history.
  * The place is marked while the dialog is open and fades out after that, so that the place in the book isn't lost.
+ * A match found by searching the book is marked the same way, while the search is open.
  */
 @Stable
 internal class SelectionFade {

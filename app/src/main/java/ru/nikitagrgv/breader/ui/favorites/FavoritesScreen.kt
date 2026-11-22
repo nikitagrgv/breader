@@ -40,6 +40,7 @@ import ru.nikitagrgv.breader.data.Favorite
 /**
  * The favorite words with their meanings. A tap shows a word in detail; a long press starts selecting them,
  * e.g. to remove several at once.
+ * @param onLookUp opens the dictionaries to look up a word the user types.
  */
 @Composable
 fun FavoritesScreen(
@@ -47,6 +48,7 @@ fun FavoritesScreen(
     contentPadding: PaddingValues,
     onOpen: (Favorite) -> Unit,
     onRemove: (Set<String>) -> Unit,
+    onLookUp: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // Keys of the selected favorites; a list, as a set isn't saveable as is.
@@ -87,11 +89,18 @@ fun FavoritesScreen(
                 }
             }
         } else {
-            Text(
-                text = stringResource(R.string.favorites_title),
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            )
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 16.dp, end = 4.dp)) {
+                Text(
+                    text = stringResource(R.string.favorites_title),
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(vertical = 12.dp),
+                )
+                IconButton(onClick = onLookUp) {
+                    Icon(painterResource(R.drawable.ic_search), contentDescription = stringResource(R.string.look_up_word))
+                }
+            }
         }
 
         if (favorites.isEmpty()) {

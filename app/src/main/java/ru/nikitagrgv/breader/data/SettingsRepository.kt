@@ -15,6 +15,8 @@ import androidx.datastore.preferences.preferencesDataStoreFile
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import ru.nikitagrgv.breader.dictionary.OnlineDictionary
+import ru.nikitagrgv.breader.translation.MachineTranslationService
 import java.io.IOException
 
 /** User preferences. There must be a single instance per process (DataStore requirement). */
@@ -42,6 +44,7 @@ class SettingsRepository(context: Context) {
                 selectionFadeMs = prefs[SELECTION_FADE_MS] ?: defaults.selectionFadeMs,
                 selectionHistorySize = prefs[SELECTION_HISTORY_SIZE] ?: defaults.selectionHistorySize,
                 translation = prefs.translationSettings(),
+                dictionaries = prefs.dictionarySettings(),
             )
         }
 
@@ -96,6 +99,25 @@ class SettingsRepository(context: Context) {
         dataStore.edit { prefs -> prefs.setTranslationSettings(transform(prefs.translationSettings())) }
     }
 
+    suspend fun updateDictionaries(transform: (DictionarySettings) -> DictionarySettings) {
+        dataStore.edit { prefs ->
+            val settings = transform(prefs.dictionarySettings())
+            prefs[ONLINE_DICTIONARIES] = settings.online.joinToString(",") { it.name }
+            prefs[YANDEX_KEY] = settings.yandexKey.trim()
+        }
+    }
+
+    private fun Preferences.dictionarySettings(): DictionarySettings {
+        val defaults = DictionarySettings()
+        return DictionarySettings(
+            online = this[ONLINE_DICTIONARIES]
+                ?.split(',')
+                ?.mapNotNullTo(HashSet()) { name -> OnlineDictionary.entries.find { it.name == name } }
+                ?: defaults.online,
+            yandexKey = this[YANDEX_KEY] ?: defaults.yandexKey,
+        )
+    }
+
     private fun Preferences.translationSettings(): TranslationSettings {
         val defaults = TranslationSettings()
         return TranslationSettings(
@@ -106,6 +128,9 @@ class SettingsRepository(context: Context) {
             contextWords = this[CONTEXT_WORDS] ?: defaults.contextWords,
             cacheSize = this[TRANSLATION_CACHE_SIZE] ?: defaults.cacheSize,
             autoTranslate = this[AUTO_TRANSLATE] ?: defaults.autoTranslate,
+            machineService = this[MACHINE_TRANSLATION]
+                ?.let { name -> MachineTranslationService.entries.find { it.name == name } }
+                ?: defaults.machineService,
         )
     }
 
@@ -118,6 +143,7 @@ class SettingsRepository(context: Context) {
         this[CONTEXT_WORDS] = settings.contextWords.coerceIn(0, TranslationSettings.MAX_CONTEXT_WORDS)
         this[TRANSLATION_CACHE_SIZE] = settings.cacheSize.coerceIn(0, TranslationSettings.MAX_CACHE_SIZE)
         this[AUTO_TRANSLATE] = settings.autoTranslate
+        this[MACHINE_TRANSLATION] = settings.machineService.name
     }
 
     private companion object {
@@ -139,5 +165,8 @@ class SettingsRepository(context: Context) {
         val CONTEXT_WORDS = intPreferencesKey("context_words")
         val TRANSLATION_CACHE_SIZE = intPreferencesKey("translation_cache_size")
         val AUTO_TRANSLATE = booleanPreferencesKey("auto_translate")
+        val MACHINE_TRANSLATION = stringPreferencesKey("machine_translation")
+        val ONLINE_DICTIONARIES = stringPreferencesKey("online_dictionaries")
+        val YANDEX_KEY = stringPreferencesKey("yandex_dictionary_key")
     }
 }

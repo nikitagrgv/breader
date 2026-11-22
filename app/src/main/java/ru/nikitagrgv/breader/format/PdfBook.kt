@@ -55,6 +55,21 @@ class PdfBook private constructor(
     }
 
     /**
+     * The running text of a page, for searching it or counting its words; null if it can't be read. Unlike [text], it
+     * doesn't push the pages on the screen out of the cache, so the whole book can be read through.
+     */
+    suspend fun pageText(page: Int): String? {
+        if (pages.isRead(page)) return pages[page].text
+        return withContext(dispatcher) {
+            if (pages.isRead(page)) {
+                pages[page].text
+            } else {
+                readSafely("the text of page $page") { readText(page).text.also { pages[page] = it } }
+            }
+        }
+    }
+
+    /**
      * Renders a part of a page, in px of the page shown [pageWidth] px wide.
      * @return an opaque image, null if it can't be rendered.
      */
@@ -170,6 +185,8 @@ class PdfBook private constructor(
         override fun get(index: Int): Paragraph = paragraphs[index] ?: UNREAD
 
         operator fun set(index: Int, text: String) = paragraphs.set(index, Paragraph(text))
+
+        fun isRead(index: Int): Boolean = paragraphs[index] != null
 
         private companion object {
             val UNREAD = Paragraph("")

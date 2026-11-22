@@ -11,6 +11,14 @@
     <string name="add_books">Add books</string>
     <string name="book_options">More options</string>
     <string name="remove_from_library">Remove from library</string>
+    <plurals name="words_total">
+        <item quantity="one">%1$s word</item>
+        <item quantity="other">%1$s words</item>
+    </plurals>
+    <plurals name="words_progress">
+        <item quantity="one">%1$s / %2$s word</item>
+        <item quantity="other">%1$s / %2$s words</item>
+    </plurals>
     <string name="book_removed">“%1$s” removed</string>
     <string name="undo">Undo</string>
     <string name="import_failed">Couldn\'t add: %1$s</string>
@@ -41,6 +49,32 @@
     <string name="add_to_favorites">Add to favorites</string>
     <string name="remove_from_favorites">Remove from favorites</string>
     <string name="copied">Copied</string>
+    <string name="machine_translation">Machine translation</string>
+    <string name="search_in_book">Search in the book</string>
+    <string name="close_search">Close search</string>
+    <string name="search_no_matches">No matches</string>
+    <string name="search_match">%1$d/%2$s</string>
+    <string name="search_previous">Previous match</string>
+    <string name="search_next">Next match</string>
+
+    <string name="reading_stats">Reading statistics</string>
+    <string name="stats_read">Read</string>
+    <string name="stats_words_unknown">Words not counted yet</string>
+    <string name="stats_time">Reading time</string>
+    <string name="stats_speed">Average speed</string>
+    <string name="stats_time_left">Time left at this speed</string>
+    <string name="stats_under_minute">under 1m</string>
+    <string name="stats_words_per_hour">%1$s words/h</string>
+    <string name="stats_nothing_yet">The time is kept for each percent of the book from now on. Read for a while to see how fast it goes.</string>
+    <string name="stats_time_per_percent">Time per percent</string>
+    <string name="stats_speed_per_percent">Speed per percent</string>
+    <string name="stats_touch_hint">Touch a bar to see its numbers</string>
+    <string name="stats_percent">%1$d–%2$d%%</string>
+    <string name="stats_not_read">not read</string>
+    <string name="stats_here">you\'re here</string>
+    <string name="stats_time_summary">How long you spent at each percent of the book. The thin vertical line is where you are.</string>
+    <string name="stats_speed_summary">Words per hour at each percent. Percents you went through faster than anyone reads, and the one you\'re at, are left out. The line across is the average.</string>
+    <string name="stats_tracked_since">The time is kept by percent since an app update: %1$s of it so far.</string>
 
     <string name="settings_title">Settings</string>
     <string name="settings_theme">Theme</string>
@@ -110,7 +144,7 @@
     </plurals>
     <string name="context_words_summary">Text around the selection sent along with it, so the right meaning is picked.</string>
     <string name="auto_translate">Translate on selection</string>
-    <string name="auto_translate_summary">Ask the models as soon as text is selected and show their translations at the top. When off, only the dictionaries and the cached translations are shown, which cost no requests. Also switched by a long press on the Translate button.</string>
+    <string name="auto_translate_summary">Ask the models as soon as text is selected and show their translations at the top. When off, only the dictionaries and the cached translations are shown, which cost nothing. Also switched by a long press on the Translate button.</string>
     <string name="translation_cache">Cache</string>
     <string name="translation_cache_off">Off</string>
     <plurals name="translation_cache_value">
@@ -123,6 +157,12 @@
         <item quantity="other">%1$d fragments saved</item>
     </plurals>
     <string name="clear_cache">Clear cache</string>
+
+    <string name="settings_machine_translation">Machine translation</string>
+    <string name="machine_translation_summary">A free service for the globe button in the reader. It translates the selected text by itself, without the text around it, so it may miss the meaning the models would pick. It uses the languages set above. Google Translate isn\'t an official API and may stop working; MyMemory has a daily limit.</string>
+    <string name="machine_google">Google Translate</string>
+    <string name="machine_mymemory">MyMemory</string>
+    <string name="machine_translation_from">Translated from %1$s</string>
 
     <string name="models_title">Translation models</string>
     <plurals name="models_selected">
@@ -173,6 +213,17 @@
     <string name="dictionaries_title">Dictionaries</string>
     <string name="manage_dictionaries">Manage dictionaries</string>
     <string name="dictionaries_summary_none">None downloaded. Download dictionaries to look up words offline.</string>
+    <string name="dictionaries_summary_online">Online: %1$s</string>
+    <string name="dictionaries_online">Online</string>
+    <string name="dictionaries_online_summary">Asked along with the downloaded dictionaries, whenever a word is looked up or selected. The words are sent to these services.</string>
+    <string name="online_yandex">Yandex Dictionary</string>
+    <string name="online_yandex_summary">Translations with synonyms and examples, for pairs of languages mostly with Russian or English. Needs a free key and the book language set in “Translate from”.</string>
+    <string name="online_google">Google Translate</string>
+    <string name="online_google_summary">The common translations of a word by part of speech; for a phrase, its translation. Not an official API, so it may stop working.</string>
+    <string name="online_wiktionary">Wiktionary</string>
+    <string name="online_wiktionary_summary">English Wiktionary online, the largest one: words of every language explained in English.</string>
+    <string name="yandex_key">Yandex Dictionary key</string>
+    <string name="yandex_key_hint">Get one for free at &lt;a href="https://yandex.ru/dev/dictionary/keys/get/?service=dict"&gt;yandex.ru/dev/dictionary&lt;/a&gt;</string>
     <plurals name="dictionaries_summary">
         <item quantity="one">%1$d downloaded</item>
         <item quantity="other">%1$d downloaded</item>
@@ -208,12 +259,18 @@
     <string name="dictionary_error_other">Couldn\'t make the dictionary.</string>
     <string name="dictionary_source">%1$s · %2$s Wiktionary</string>
     <string name="dictionary_nothing_found">The dictionaries have nothing for it.</string>
-    <string name="dictionary_none_downloaded">No dictionaries are downloaded.</string>
+    <string name="dictionary_none">No dictionaries: download one or turn on the online ones.</string>
+    <string name="dictionary_search">Look up a word</string>
+    <string name="dictionary_search_hint">Press search on the keyboard to look it up.</string>
+    <string name="dictionary_asking">Asking %1$s…</string>
+    <string name="dictionary_failed">%1$s: %2$s</string>
+    <string name="dictionary_needs_source_language">set the book language in “Translate from” in the settings</string>
 
     <string name="favorites_title">Favorites</string>
     <string name="favorites_empty">No favorites yet.\nSelect a word in a book and tap the star to keep it here.</string>
     <string name="favorite_not_found">The dictionaries have nothing for it, so it can\'t be kept.</string>
-    <string name="favorites_need_dictionary">Favorites are words from the dictionaries. Download one in the settings first.</string>
+    <string name="favorites_need_dictionary">Favorites are words from the dictionaries. Download one or turn on the online ones in the settings first.</string>
+    <string name="look_up_word">Look up a word</string>
     <string name="favorite_remove_title">Remove “%1$s” from the favorites?</string>
     <plurals name="favorites_remove_title">
         <item quantity="one">Remove %1$d word from the favorites?</item>

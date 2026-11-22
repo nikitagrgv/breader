@@ -3,6 +3,7 @@ package ru.nikitagrgv.breader.ui.reader
 import android.content.ClipData
 import android.os.Build
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -37,6 +38,9 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.contextmenu.provider.LocalTextContextMenuToolbarProvider
 import androidx.compose.foundation.text.contextmenu.provider.TextContextMenuDataProvider
 import androidx.compose.foundation.text.contextmenu.provider.TextContextMenuProvider
@@ -44,6 +48,8 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.text.selection.SelectionState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -66,13 +72,18 @@ import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -81,6 +92,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.Hyphens
 import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextAlign
@@ -90,7 +102,11 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.filterNot
@@ -99,9 +115,11 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import ru.nikitagrgv.breader.R
 import ru.nikitagrgv.breader.data.ReadingPosition
+import ru.nikitagrgv.breader.data.percentOf
 import ru.nikitagrgv.breader.data.favoriteKey
 import ru.nikitagrgv.breader.data.SeekBarPosition
 import ru.nikitagrgv.breader.format.BookContent
+import ru.nikitagrgv.breader.format.BookWords
 import ru.nikitagrgv.breader.format.InlineStyle
 import ru.nikitagrgv.breader.format.Paragraph
 import ru.nikitagrgv.breader.format.ParagraphKind
@@ -118,7 +136,11 @@ import kotlin.math.roundToInt
  * @param onSelectionChange gets every change of the selection in the book; null when it's cleared.
  * @param autoTranslate whether the selection is translated at once; the selection is reported again when it changes.
  * @param readingTimeMs how long the open book has been read, for the top bar.
- * @param onReadingTime gets the time the book is read for, in parts, while the reader is shown in the resumed app.
+ * @param wordCount how many words the open book has; null until they're counted.
+ * @param onReadingTime gets the time the book is read for, in parts, while the reader is shown in the resumed app, with
+ *   the percent of the book it was spent at.
+ * @param onMachineTranslate translates the selection by a free service, which doesn't get the context.
+ * @param onShowStats shows the reading statistics of the open book.
  * @param selectionFadeMs how long the place of the selection fades out after a dialog about it is closed; 0 for not showing it.
  * @param selectionHistorySize how many selections the book's history keeps; 0 if it's off.
  * @param dialogOpen whether a dialog opened from the selection's actions is still over the book.
@@ -134,7 +156,8 @@ fun ReaderScreen(
     onHideChrome: () -> Unit,
     onPositionChange: (bookId: String, position: ReadingPosition, progress: Float) -> Unit,
     readingTimeMs: Long,
-    onReadingTime: (bookId: String, ms: Long) -> Unit,
+    wordCount: Int?,
+    onReadingTime: (bookId: String, ms: Long, percent: Int?) -> Unit,
     translationPreview: TranslationState?,
     onSelectionChange: (BookSelection?) -> Unit,
     onTranslate: (BookSelection) -> Unit,
@@ -143,6 +166,7 @@ fun ReaderScreen(
     onLookUp: (BookSelection) -> Unit,
     onGrammar: (BookSelection) -> Unit,
     onQuickTranslate: (BookSelection) -> Unit,
+    onMachineTranslate: (BookSelection) -> Unit,
     favoriteKeys: Set<String>,
     onFavorite: (BookSelection) -> Unit,
     moreSelectionActions: Boolean,
@@ -150,6 +174,7 @@ fun ReaderScreen(
     selectionFadeMs: Int,
     selectionHistorySize: Int,
     dialogOpen: Boolean,
+    onShowStats: () -> Unit,
     onOpenLibrary: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -183,7 +208,8 @@ fun ReaderScreen(
                         onHideChrome = onHideChrome,
                         onPositionChange = { position, progress -> onPositionChange(state.bookId, position, progress) },
                         readingTimeMs = readingTimeMs,
-                        onReadingTime = { onReadingTime(state.bookId, it) },
+                        wordCount = wordCount,
+                        onReadingTime = { ms, percent -> onReadingTime(state.bookId, ms, percent) },
                         translationPreview = translationPreview,
                         onSelectionChange = onSelectionChange,
                         onTranslate = onTranslate,
@@ -192,6 +218,7 @@ fun ReaderScreen(
                         onLookUp = onLookUp,
                         onGrammar = onGrammar,
                         onQuickTranslate = onQuickTranslate,
+                        onMachineTranslate = onMachineTranslate,
                         favoriteKeys = favoriteKeys,
                         onFavorite = onFavorite,
                         moreSelectionActions = moreSelectionActions,
@@ -199,6 +226,7 @@ fun ReaderScreen(
                         selectionFadeMs = selectionFadeMs,
                         selectionHistorySize = selectionHistorySize,
                         dialogOpen = dialogOpen,
+                        onShowStats = onShowStats,
                     )
                 }
             }
@@ -224,7 +252,8 @@ private fun BookText(
     onHideChrome: () -> Unit,
     onPositionChange: (ReadingPosition, Float) -> Unit,
     readingTimeMs: Long,
-    onReadingTime: (Long) -> Unit,
+    wordCount: Int?,
+    onReadingTime: (ms: Long, percent: Int?) -> Unit,
     translationPreview: TranslationState?,
     onSelectionChange: (BookSelection?) -> Unit,
     onTranslate: (BookSelection) -> Unit,
@@ -233,6 +262,7 @@ private fun BookText(
     onLookUp: (BookSelection) -> Unit,
     onGrammar: (BookSelection) -> Unit,
     onQuickTranslate: (BookSelection) -> Unit,
+    onMachineTranslate: (BookSelection) -> Unit,
     favoriteKeys: Set<String>,
     onFavorite: (BookSelection) -> Unit,
     moreSelectionActions: Boolean,
@@ -240,6 +270,7 @@ private fun BookText(
     selectionFadeMs: Int,
     selectionHistorySize: Int,
     dialogOpen: Boolean,
+    onShowStats: () -> Unit,
 ) {
     val paragraphs = state.content.paragraphs
     // Saveable, so the position survives switching tabs and configuration changes.
@@ -247,7 +278,13 @@ private fun BookText(
     val viewport = rememberSaveable(saver = PdfViewport.Saver) {
         PdfViewport(state.initialPosition.zoom, state.initialPosition.pan.toFloat())
     }
-    val progress by remember(listState) { derivedStateOf { listState.readingProgress() } }
+    // Paragraphs can be a line or a page long, so how much is read is told by the words, where they're known.
+    val words = state.words?.takeIf { it.total > 0 && it.paragraphs == paragraphs.size }
+    val progress by remember(listState) { derivedStateOf { listState.readingProgress(words) } }
+    val percent by remember(listState) { derivedStateOf { progress?.let(::percentOf) } }
+    var searchOpen by rememberSaveable { mutableStateOf(false) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    val search = remember(state.content) { BookSearch(state.content) }
     // Not saveable on purpose: a restored selection would refer to texts that are composed anew.
     val selection = remember(state.content) { selectionIn(state.content) }
     val hasSelection by remember(selection) { derivedStateOf { selection.hasSelection } }
@@ -256,6 +293,7 @@ private fun BookText(
     // The position (0..1) the seek bar is dragged to; null while it isn't touched.
     var seekFraction by remember { mutableStateOf<Float?>(null) }
     var topBarHeight by remember { mutableIntStateOf(0) }
+    var searchBarHeight by remember { mutableIntStateOf(0) }
     // The last ones known, for telling what the selection bars are likely to cover.
     var previewHeight by remember { mutableIntStateOf(0) }
     var selectionBarHeight by remember { mutableIntStateOf(0) }
@@ -297,7 +335,7 @@ private fun BookText(
 
     /** The part of the screen that's left for the text with a selection on it, in px. */
     fun freeArea(): IntRange {
-        val top = maxOf(previewHeight, if (chromeVisible) topBarHeight else 0)
+        val top = maxOf(previewHeight, if (chromeVisible) topBarHeight else 0, if (searchOpen) searchBarHeight else 0)
         val bottom = with(density) {
             (if (selectionBarHeight > 0) selectionBarHeight else SELECTION_BAR_USUAL_HEIGHT.roundToPx()) +
                 contentPadding.calculateBottomPadding().roundToPx() + SELECTED_LINE_ROOM.roundToPx()
@@ -305,8 +343,35 @@ private fun BookText(
         return top..(listState.layoutInfo.viewportSize.height - bottom)
     }
 
-    ReadingTimeTracker(onReadingTime)
-    SelectionFadeEffect(fade, dialogOpen, selectionFadeMs)
+    ReadingTimeTracker(percent, onReadingTime)
+    // A match found by the search stays marked while the search is open.
+    SelectionFadeEffect(fade, dialogOpen || searchOpen, selectionFadeMs)
+
+    BackHandler(enabled = searchOpen) { searchOpen = false }
+    // Searched anew once the typing stops for a moment.
+    LaunchedEffect(search, searchOpen) {
+        if (!searchOpen) return@LaunchedEffect
+        snapshotFlow { searchQuery }.collectLatest { query ->
+            delay(SEARCH_DELAY_MS)
+            search.run(query, from = listState.firstVisibleItemIndex)
+        }
+    }
+    // The match being shown is marked and brought into view.
+    LaunchedEffect(search, searchOpen) {
+        if (!searchOpen) return@LaunchedEffect
+        snapshotFlow { search.currentMatch }.collectLatest { range ->
+            if (range == null) return@collectLatest
+            selection.prepare(range)
+            val target = range.inBook(selection.paragraphs) ?: return@collectLatest
+            fade.place = target
+            try {
+                bringIntoView(target, selection, listState, viewport, freeArea())
+            } catch (e: CancellationException) {
+                // A finger has stopped the scrolling, unless this jump is cancelled itself.
+                currentCoroutineContext().ensureActive()
+            }
+        }
+    }
 
     // The bars only get in the way while reading, so they're hidden once the user drags the text
     // (jumps made with the seek bar don't count). It also means reading on from wherever the text is now.
@@ -326,7 +391,8 @@ private fun BookText(
     }
     LaunchedEffect(listState, paragraphs.size) {
         snapshotFlow { seekFraction }.filterNotNull().collectLatest { fraction ->
-            listState.scrollToItem((fraction * (paragraphs.size - 1)).roundToInt())
+            val index = words?.find(fraction)?.first ?: (fraction * (paragraphs.size - 1)).roundToInt()
+            listState.scrollToItem(index)
         }
     }
     DisposableEffect(listState) {
@@ -376,24 +442,47 @@ private fun BookText(
             )
         }
 
+        // The search takes the place of the top bar.
         AnimatedVisibility(
-            visible = chromeVisible,
+            visible = chromeVisible && !searchOpen,
             enter = fadeIn() + slideInVertically { -it },
             exit = fadeOut() + slideOutVertically { -it },
             modifier = Modifier.align(Alignment.TopCenter),
         ) {
+            // Pages are what a PDF is made of, while in a book laid out by the reader they mean nothing.
+            val position = if (selection is PdfSelection) {
+                val page by remember(listState) { derivedStateOf { listState.middleItemIndex() + 1 } }
+                stringResource(R.string.page_number, page, paragraphs.size)
+            } else {
+                progress?.let { stringResource(R.string.progress_percent, it * 100) }
+            }
+            val wordsRead = wordCount?.let { total -> progress?.let { wordsProgress((it * total).roundToInt(), total) } }
             ReaderTopBar(
                 title = state.title,
-                // Pages are what a PDF is made of, while in a book laid out by the reader they mean nothing.
-                position = if (selection is PdfSelection) {
-                    val page by remember(listState) { derivedStateOf { listState.middleItemIndex() + 1 } }
-                    stringResource(R.string.page_number, page, paragraphs.size)
-                } else {
-                    progress?.let { stringResource(R.string.progress_percent, it * 100) }
-                },
-                readingTimeMs = readingTimeMs,
+                details = listOfNotNull(position, wordsRead, formatReadingTime(readingTimeMs)).joinToString(" · ").ifEmpty { null },
                 cornerSpace = if (historyOn) SelectionHistoryButtonsWidth else 0.dp,
+                onSearch = {
+                    searchOpen = true
+                    onHideChrome()
+                },
+                onShowStats = onShowStats,
                 modifier = Modifier.onSizeChanged { topBarHeight = it.height },
+            )
+        }
+
+        AnimatedVisibility(
+            visible = searchOpen,
+            enter = fadeIn() + slideInVertically { -it },
+            exit = fadeOut() + slideOutVertically { -it },
+            modifier = Modifier.align(Alignment.TopCenter),
+        ) {
+            ReaderSearchBar(
+                query = searchQuery,
+                onQueryChange = { searchQuery = it },
+                search = search,
+                onClose = { searchOpen = false },
+                cornerSpace = if (historyOn) SelectionHistoryButtonsWidth else 0.dp,
+                modifier = Modifier.onSizeChanged { searchBarHeight = it.height },
             )
         }
 
@@ -457,6 +546,7 @@ private fun BookText(
                 onTranslate = { openDialog(onTranslate) },
                 // The selection stays: the quick translation is shown for it, the star is filled for it.
                 onQuickTranslate = { selection.locate()?.let(onQuickTranslate) },
+                onMachineTranslate = { openDialog(onMachineTranslate) },
                 favorite = favoriteKey(selectedText) in favoriteKeys,
                 onFavorite = { selection.locate()?.let(onFavorite) },
                 autoTranslate = autoTranslate,
@@ -607,6 +697,9 @@ private fun BoxScope.SeekBarOverlay(
 
 private const val MAX_BLANK_LINES = 2
 
+/** How long the typing has to stop for before the book is searched. */
+private const val SEARCH_DELAY_MS = 300L
+
 /** The height of the bar of actions on the selection before it's first shown. */
 private val SELECTION_BAR_USUAL_HEIGHT = 120.dp
 
@@ -632,11 +725,19 @@ private object NoTextContextMenu : TextContextMenuProvider {
     }
 }
 
-private fun LazyListState.readingProgress(): Float? {
-    val total = layoutInfo.totalItemsCount
+/** @param words how the words are spread over the items; the items are counted instead without them. */
+private fun LazyListState.readingProgress(words: BookWords?): Float? {
+    val layout = layoutInfo
+    val total = layout.totalItemsCount
     return when {
         total == 0 -> null // Not laid out yet.
         !canScrollForward -> 1f
+        words != null -> {
+            val first = firstVisibleItemIndex
+            val size = layout.visibleItemsInfo.firstOrNull { it.index == first }?.size ?: 0
+            val share = if (size > 0) firstVisibleItemScrollOffset.toFloat() / size else 0f
+            words.at(first, share) / words.total
+        }
         else -> firstVisibleItemIndex.toFloat() / total
     }
 }
@@ -734,30 +835,127 @@ private fun rememberParagraphLooks(settings: ReaderSettings): Map<ParagraphKind,
     }
 }
 
+/** @param details where the reader is in the book and how long it's been read. */
 @Composable
-private fun ReaderTopBar(title: String, position: String?, readingTimeMs: Long, cornerSpace: Dp, modifier: Modifier = Modifier) {
+private fun ReaderTopBar(
+    title: String,
+    details: String?,
+    cornerSpace: Dp,
+    onSearch: () -> Unit,
+    onShowStats: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Surface(color = MaterialTheme.colorScheme.surfaceContainer, modifier = modifier.fillMaxWidth()) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
                 // The buttons going through the selections are shown over the right end.
-                .absolutePadding(left = 16.dp, right = 16.dp + cornerSpace, top = 12.dp, bottom = 12.dp),
+                .absolutePadding(left = 16.dp, right = 4.dp + cornerSpace, top = 4.dp, bottom = 4.dp),
         ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-            if (position != null) {
+            Column(
+                Modifier
+                    .weight(1f)
+                    .padding(vertical = 4.dp),
+            ) {
                 Text(
-                    text = listOfNotNull(position, formatReadingTime(readingTimeMs)).joinToString(" · "),
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (details != null) {
+                    Text(
+                        text = details,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            IconButton(onClick = onSearch) {
+                Icon(painterResource(R.drawable.ic_search), contentDescription = stringResource(R.string.search_in_book))
+            }
+            IconButton(onClick = onShowStats) {
+                Icon(painterResource(R.drawable.ic_bar_chart), contentDescription = stringResource(R.string.reading_stats))
+            }
+        }
+    }
+}
+
+/** Typing the text to find and going through the matches, in the place of the top bar. */
+@Composable
+private fun ReaderSearchBar(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    search: BookSearch,
+    onClose: () -> Unit,
+    cornerSpace: Dp,
+    modifier: Modifier = Modifier,
+) {
+    val focus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    // Opened to type in at once.
+    LaunchedEffect(Unit) { focus.requestFocus() }
+    Surface(color = MaterialTheme.colorScheme.surfaceContainer, modifier = modifier.fillMaxWidth()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+                .absolutePadding(left = 4.dp, right = 4.dp + cornerSpace, top = 4.dp, bottom = 4.dp),
+        ) {
+            IconButton(onClick = onClose) {
+                Icon(painterResource(R.drawable.ic_close), contentDescription = stringResource(R.string.close_search))
+            }
+            BasicTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
+                decorationBox = { field ->
+                    Box(contentAlignment = Alignment.CenterStart) {
+                        if (query.isEmpty()) {
+                            Text(
+                                text = stringResource(R.string.search_in_book),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        field()
+                    }
+                },
+                modifier = Modifier
+                    .weight(1f)
+                    .focusRequester(focus),
+            )
+            val matches = search.matches
+            val count = when {
+                query.isBlank() -> null
+                matches.isEmpty() -> if (search.searching) "…" else stringResource(R.string.search_no_matches)
+                else -> stringResource(
+                    R.string.search_match,
+                    search.current + 1,
+                    // There may be more to come, or more than are kept.
+                    matches.size.toString() + if (search.searching || search.truncated) "+" else "",
+                )
+            }
+            if (count != null) {
+                Text(
+                    text = count,
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 16.dp),
+                    modifier = Modifier.padding(horizontal = 4.dp),
                 )
+            }
+            IconButton(onClick = search::previous, enabled = matches.isNotEmpty()) {
+                Icon(painterResource(R.drawable.ic_expand_less), contentDescription = stringResource(R.string.search_previous))
+            }
+            IconButton(onClick = search::next, enabled = matches.isNotEmpty()) {
+                Icon(painterResource(R.drawable.ic_expand_more), contentDescription = stringResource(R.string.search_next))
             }
         }
     }

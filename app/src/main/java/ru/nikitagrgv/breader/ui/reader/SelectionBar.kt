@@ -64,6 +64,7 @@ import ru.nikitagrgv.breader.R
  * always there; the rest are in an extra row above them, opened by the arrow. There's no button to clear the
  * selection: a tap on the text does it.
  * @param moreOpen whether the extra row is open.
+ * @param onMachineTranslate translates by a free service, apart from the models: it doesn't get the context.
  * @param favorite whether the selected word is a favorite.
  */
 @Composable
@@ -75,6 +76,7 @@ fun SelectionBar(
     onLookUp: () -> Unit,
     onTranslate: () -> Unit,
     onQuickTranslate: () -> Unit,
+    onMachineTranslate: () -> Unit,
     autoTranslate: Boolean,
     onAutoTranslateChange: (Boolean) -> Unit,
     favorite: Boolean,
@@ -113,6 +115,7 @@ fun SelectionBar(
                     onAutoTranslateChange = onAutoTranslateChange,
                     modifier = Modifier.weight(1.6f),
                 )
+                SelectionAction(R.drawable.ic_language, R.string.machine_translation, onMachineTranslate)
                 SelectionAction(R.drawable.ic_dictionary, R.string.dictionary, onLookUp)
             }
         }

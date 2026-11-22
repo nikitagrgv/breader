@@ -118,5 +118,14 @@ internal class DictionaryReader(file: File) : Closeable {
         }
     }
 
+    /** The words whose keys start with the key [prefix], in their order; the same word may come more than once. */
+    fun wordsStartingWith(prefix: String, limit: Int): List<String> {
+        // A range rather than LIKE, so that the index is used. The keys are compared byte by byte as UTF-8.
+        val sql = "SELECT word FROM entries WHERE word_key >= ? AND word_key < ? ORDER BY word_key LIMIT ${limit * 2}"
+        return db.rawQuery(sql, arrayOf(prefix, prefix + Char.MAX_VALUE)).use { cursor ->
+            buildList { while (cursor.moveToNext()) add(cursor.getString(0)) }
+        }
+    }
+
     override fun close() = db.close()
 }

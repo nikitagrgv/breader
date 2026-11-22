@@ -2,6 +2,7 @@ package ru.nikitagrgv.breader.ui.reader
 
 import ru.nikitagrgv.breader.data.ReadingPosition
 import ru.nikitagrgv.breader.format.BookContent
+import ru.nikitagrgv.breader.format.BookWords
 
 sealed interface ReaderState {
     /** The library is still being read (a few ms), so it isn't known yet whether there's a book to reopen. */
@@ -18,6 +19,8 @@ sealed interface ReaderState {
         /** Where to start when the book is shown for the first time. */
         val initialPosition: ReadingPosition,
         val history: SelectionHistoryState,
+        /** How the words are spread over the paragraphs; null for a PDF, whose pages are read as they're shown. */
+        val words: BookWords? = null,
     ) : ReaderState
 
     data class Failed(val bookId: String, val title: String) : ReaderState

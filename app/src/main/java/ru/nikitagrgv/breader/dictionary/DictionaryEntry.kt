@@ -12,6 +12,8 @@ data class DictionaryEntry(
     /** Inflected forms, e.g. "runs" and "ran" of "run". */
     val forms: List<String>,
     val senses: List<DictionarySense>,
+    /** How it's pronounced, in IPA; empty if the dictionary doesn't say. */
+    val transcription: String = "",
 )
 
 data class DictionarySense(
@@ -20,6 +22,11 @@ data class DictionarySense(
     /** Like "colloquial" or "transitive". */
     val tags: List<String> = emptyList(),
     val examples: List<DictionaryExample> = emptyList(),
+    /**
+     * For a translation, the words of the looked up language that it translates too, telling which meaning it is: "flee"
+     * for "бежать" as a translation of "run".
+     */
+    val backTranslations: List<String> = emptyList(),
 )
 
 /** @param translation into the language of the dictionary's Wiktionary edition; empty if there's none. */
@@ -121,4 +128,4 @@ private fun JSONArray?.arrays(): List<JSONArray> =
     if (this == null) emptyList() else (0 until length()).mapNotNull { optJSONArray(it) }
 
 /** Unlike [JSONObject.optString], doesn't turn null into "null". */
-private fun JSONObject.string(name: String): String = (opt(name) as? String)?.trim().orEmpty()
+internal fun JSONObject.string(name: String): String = (opt(name) as? String)?.trim().orEmpty()

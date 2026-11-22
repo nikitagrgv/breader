@@ -14,14 +14,14 @@ import ru.nikitagrgv.breader.BreaderApplication
 import ru.nikitagrgv.breader.data.Favorite
 import ru.nikitagrgv.breader.data.FavoritesRepository
 import ru.nikitagrgv.breader.data.favoriteKey
-import ru.nikitagrgv.breader.dictionary.DictionaryRepository
+import ru.nikitagrgv.breader.dictionary.Dictionaries
 import ru.nikitagrgv.breader.dictionary.dictionaryKey
 import ru.nikitagrgv.breader.dictionary.meaningsLine
 
 /** Favorites are words of the dictionaries: they're kept with their meanings. */
 class FavoritesViewModel(
     private val repository: FavoritesRepository,
-    private val dictionaries: DictionaryRepository,
+    private val dictionaries: Dictionaries,
 ) : ViewModel() {
     val favorites: StateFlow<List<Favorite>> = repository.favorites
 
@@ -33,7 +33,7 @@ class FavoritesViewModel(
     /** Adds the selected [text] with its meanings; [onNotFound] is called instead if the dictionaries have nothing for it. */
     fun add(text: String, onNotFound: () -> Unit) {
         viewModelScope.launch {
-            val results = dictionaries.lookup(text)
+            val results = dictionaries.lookupAll(text)
             val brief = results.meaningsLine() ?: return@launch onNotFound()
             val key = favoriteKey(text)
             // The dictionary's spelling, e.g. "push" for "Push" at the start of a sentence, unless it's another word.
@@ -49,7 +49,7 @@ class FavoritesViewModel(
         val Factory = viewModelFactory {
             initializer {
                 val app = this[APPLICATION_KEY] as BreaderApplication
-                FavoritesViewModel(app.favoritesRepository, app.dictionaryRepository)
+                FavoritesViewModel(app.favoritesRepository, app.dictionaries)
             }
         }
     }

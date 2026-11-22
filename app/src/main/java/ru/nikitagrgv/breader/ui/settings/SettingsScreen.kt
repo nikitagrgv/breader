@@ -44,9 +44,13 @@ import ru.nikitagrgv.breader.data.AppTheme
 import ru.nikitagrgv.breader.data.ReaderFont
 import ru.nikitagrgv.breader.data.SeekBarPosition
 import ru.nikitagrgv.breader.data.TranslationSettings
+import ru.nikitagrgv.breader.dictionary.OnlineDictionary
+import ru.nikitagrgv.breader.translation.MachineTranslationService
+import ru.nikitagrgv.breader.ui.dictionary.title
 import ru.nikitagrgv.breader.ui.reader.ReaderTextPreview
 import ru.nikitagrgv.breader.ui.reader.fontFamily
 import ru.nikitagrgv.breader.ui.reader.toReaderSettings
+import ru.nikitagrgv.breader.ui.translation.title
 import kotlin.math.roundToInt
 
 private val THEMES = listOf(
@@ -89,6 +93,7 @@ fun SettingsScreen(
     cachedTranslations: Int,
     onClearTranslationCache: () -> Unit,
     dictionaries: Int,
+    onlineDictionaries: List<OnlineDictionary>,
     onOpenDictionaries: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -263,17 +268,44 @@ fun SettingsScreen(
         SectionHeader(R.string.settings_translation)
         TranslationSection(settings.translation, onTranslationChange, cachedTranslations, onClearTranslationCache)
 
+        SectionHeader(R.string.settings_machine_translation)
+        Text(
+            text = stringResource(R.string.machine_translation_summary),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        )
+        SingleChoiceSegmentedButtonRow(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+        ) {
+            MachineTranslationService.entries.forEachIndexed { index, service ->
+                SegmentedButton(
+                    selected = settings.translation.machineService == service,
+                    onClick = { onTranslationChange { it.copy(machineService = service) } },
+                    shape = SegmentedButtonDefaults.itemShape(index, MachineTranslationService.entries.size),
+                    label = { Text(stringResource(service.title)) },
+                )
+            }
+        }
+
         SectionHeader(R.string.dictionaries_title)
         ListItem(
             headlineContent = { Text(stringResource(R.string.manage_dictionaries)) },
             supportingContent = {
-                Text(
-                    if (dictionaries == 0) {
-                        stringResource(R.string.dictionaries_summary_none)
-                    } else {
-                        pluralStringResource(R.plurals.dictionaries_summary, dictionaries, dictionaries)
-                    },
-                )
+                val downloaded = if (dictionaries == 0) {
+                    stringResource(R.string.dictionaries_summary_none)
+                } else {
+                    pluralStringResource(R.plurals.dictionaries_summary, dictionaries, dictionaries)
+                }
+                val online = onlineDictionaries.map { stringResource(it.title) }
+                val summary = if (online.isEmpty()) {
+                    downloaded
+                } else {
+                    listOf(downloaded, stringResource(R.string.dictionaries_summary_online, online.joinToString())).joinToString("\n")
+                }
+                Text(summary)
             },
             modifier = Modifier.clickable(onClick = onOpenDictionaries),
         )

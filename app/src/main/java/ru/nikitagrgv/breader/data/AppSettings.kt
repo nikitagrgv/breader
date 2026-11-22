@@ -1,5 +1,9 @@
 package ru.nikitagrgv.breader.data
 
+import ru.nikitagrgv.breader.dictionary.OnlineDictionary
+import ru.nikitagrgv.breader.translation.MachineTranslationService
+import ru.nikitagrgv.breader.translation.deviceLanguageCode
+import ru.nikitagrgv.breader.translation.languageCode
 import java.util.Locale
 
 enum class AppTheme(val isDark: Boolean) {
@@ -60,6 +64,7 @@ data class AppSettings(
     /** How many selections each book's history keeps; 0 turns the history off, without losing what's in it. */
     val selectionHistorySize: Int = DEFAULT_SELECTION_HISTORY_SIZE,
     val translation: TranslationSettings = TranslationSettings(),
+    val dictionaries: DictionarySettings = DictionarySettings(),
 ) {
     companion object {
         const val DEFAULT_FONT_SIZE = 18f
@@ -95,12 +100,22 @@ data class TranslationSettings(
     val cacheSize: Int = DEFAULT_CACHE_SIZE,
     /** Translate the selected text at once, showing it at the top of the reader; otherwise only on request. */
     val autoTranslate: Boolean = true,
+    /** The free service that translates the selection by itself, without its context. */
+    val machineService: MachineTranslationService = MachineTranslationService.GOOGLE,
 ) {
     val isConfigured: Boolean
         get() = apiKey.isNotBlank() && models.isNotEmpty()
 
     val effectiveTargetLanguage: String
         get() = targetLanguage.trim().ifEmpty { deviceLanguage() }
+
+    /** The code of [sourceLanguage] for web services; null if it's to be detected, or the name isn't known. */
+    val sourceCode: String?
+        get() = languageCode(sourceLanguage)
+
+    /** The code of [effectiveTargetLanguage] for web services; the device language's if the name isn't known. */
+    val targetCode: String
+        get() = languageCode(targetLanguage) ?: deviceLanguageCode()
 
     companion object {
         const val DEFAULT_CONTEXT_WORDS = 30
@@ -112,4 +127,15 @@ data class TranslationSettings(
 
         fun deviceLanguage(): String = Locale.getDefault().getDisplayLanguage(Locale.ENGLISH)
     }
+}
+
+/** Dictionaries on the web, which are asked along with the downloaded ones. */
+data class DictionarySettings(
+    val online: Set<OnlineDictionary> = OnlineDictionary.entries.toSet(),
+    /** The user's key for [OnlineDictionary.YANDEX], which isn't asked without it. */
+    val yandexKey: String = "",
+) {
+    /** The ones that can be asked. */
+    val usable: List<OnlineDictionary>
+        get() = OnlineDictionary.entries.filter { it in online && (it != OnlineDictionary.YANDEX || yandexKey.isNotBlank()) }
 }

@@ -57,8 +57,11 @@ import ru.nikitagrgv.breader.ui.reader.ReaderState
 import ru.nikitagrgv.breader.ui.reader.bookId
 import ru.nikitagrgv.breader.ui.reader.toReaderSettings
 import ru.nikitagrgv.breader.ui.settings.SettingsScreen
+import ru.nikitagrgv.breader.ui.stats.ReadingStatsSheet
 import ru.nikitagrgv.breader.ui.translation.GrammarSheet
 import ru.nikitagrgv.breader.ui.translation.GrammarViewModel
+import ru.nikitagrgv.breader.ui.translation.MachineTranslationSheet
+import ru.nikitagrgv.breader.ui.translation.MachineTranslationViewModel
 import ru.nikitagrgv.breader.ui.translation.TranslationSheet
 import ru.nikitagrgv.breader.ui.translation.TranslationViewModel
 
@@ -75,12 +78,18 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
     val translation by translationViewModel.sheet.collectAsStateWithLifecycle()
     val translationPreview by translationViewModel.preview.collectAsStateWithLifecycle()
     val cachedTranslations by translationViewModel.cacheSize.collectAsStateWithLifecycle()
+    val machineViewModel: MachineTranslationViewModel = viewModel(factory = MachineTranslationViewModel.Factory)
+    val machineTranslation by machineViewModel.state.collectAsStateWithLifecycle()
     val grammarViewModel: GrammarViewModel = viewModel(factory = GrammarViewModel.Factory)
     val grammar by grammarViewModel.state.collectAsStateWithLifecycle()
     val dictionaryViewModel: DictionaryViewModel = viewModel(factory = DictionaryViewModel.Factory)
     val dictionaryLookup by dictionaryViewModel.lookup.collectAsStateWithLifecycle()
     val dictionaries by dictionaryViewModel.installed.collectAsStateWithLifecycle()
+    val dictionarySuggestions by dictionaryViewModel.suggestions.collectAsStateWithLifecycle()
+    val hasDictionaries = dictionaries.isNotEmpty() || settings.dictionaries.usable.isNotEmpty()
     var managingDictionaries by rememberSaveable { mutableStateOf(false) }
+    // The book whose reading statistics are shown.
+    var statsBookId by rememberSaveable { mutableStateOf<String?>(null) }
     val favoritesViewModel: FavoritesViewModel = viewModel(factory = FavoritesViewModel.Factory)
     val favorites by favoritesViewModel.favorites.collectAsStateWithLifecycle()
     val favoriteKeys by favoritesViewModel.keys.collectAsStateWithLifecycle()
@@ -90,6 +99,7 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
     val readerState by viewModel.reader.collectAsStateWithLifecycle()
     val library by viewModel.library.collectAsStateWithLifecycle()
     val readerSettings = remember(settings) { settings.toReaderSettings() }
+    val openBook = library?.books?.find { it.id == readerState.bookId }
     var tab by rememberSaveable { mutableStateOf(MainTab.READER) }
     // Hidden to begin with, as the app opens on the book being read.
     var readerChromeVisible by rememberSaveable { mutableStateOf(false) }
@@ -145,6 +155,7 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
                         tab = MainTab.READER
                     },
                     onRemoveBook = viewModel::removeBook,
+                    onShowStats = { statsBookId = it.id },
                 )
                 // The book text ignores innerPadding: the bars are drawn over it, so showing them doesn't move the text.
                 MainTab.READER -> ReaderScreen(
@@ -156,7 +167,8 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
                     onToggleChrome = { readerChromeVisible = !readerChromeVisible },
                     onHideChrome = { readerChromeVisible = false },
                     onPositionChange = viewModel::savePosition,
-                    readingTimeMs = library?.books?.find { it.id == readerState.bookId }?.readingTimeMs ?: 0,
+                    readingTimeMs = openBook?.readingTimeMs ?: 0,
+                    wordCount = openBook?.wordCount,
                     onReadingTime = viewModel::addReadingTime,
                     translationPreview = translationPreview,
                     onSelectionChange = { selection ->
@@ -189,6 +201,9 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
                             translationViewModel.openSheet(excerpt, settings.translation)
                         }
                     },
+                    onMachineTranslate = { selection ->
+                        machineViewModel.translate(selection.excerpt(contextWords = 0).fragment, settings.translation)
+                    },
                     favoriteKeys = favoriteKeys,
                     onFavorite = { selection ->
                         val text = selection.excerpt(contextWords = 0).fragment
@@ -197,7 +212,7 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
                             removingFavorite = favorite
                         } else {
                             favoritesViewModel.add(text) {
-                                val message = if (dictionaries.isEmpty()) R.string.favorites_need_dictionary else R.string.favorite_not_found
+                                val message = if (hasDictionaries) R.string.favorite_not_found else R.string.favorites_need_dictionary
                                 Toast.makeText(context, message, Toast.LENGTH_LONG).show()
                             }
                         }
@@ -207,7 +222,9 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
                     selectionFadeMs = settings.selectionFadeMs,
                     selectionHistorySize = settings.selectionHistorySize,
                     // Going from a dictionary entry to managing the dictionaries still keeps the book covered.
-                    dialogOpen = translation != null || grammar != null || dictionaryLookup != null || managingDictionaries,
+                    dialogOpen = translation != null || grammar != null || dictionaryLookup != null || managingDictionaries ||
+                        machineTranslation != null,
+                    onShowStats = { statsBookId = readerState.bookId },
                     onOpenLibrary = { tab = MainTab.LIBRARY },
                 )
                 MainTab.FAVORITES -> FavoritesScreen(
@@ -215,6 +232,7 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
                     contentPadding = innerPadding,
                     onOpen = { favorite -> dictionaryViewModel.lookUp(favorite.word) },
                     onRemove = favoritesViewModel::remove,
+                    onLookUp = { dictionaryViewModel.lookUp("") },
                 )
                 MainTab.SETTINGS -> SettingsScreen(
                     settings = settings,
@@ -233,6 +251,7 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
                     cachedTranslations = cachedTranslations,
                     onClearTranslationCache = translationViewModel::clearCache,
                     dictionaries = dictionaries.size,
+                    onlineDictionaries = settings.dictionaries.usable,
                     onOpenDictionaries = { managingDictionaries = true },
                 )
             }
@@ -251,6 +270,19 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
         )
     }
 
+    machineTranslation?.let { state ->
+        MachineTranslationSheet(
+            state = state,
+            onServiceChange = { service ->
+                machineViewModel.switchService(service)
+                // The one picked here is the one wanted next time too.
+                viewModel.updateTranslationSettings { it.copy(machineService = service) }
+            },
+            onRetry = machineViewModel::retry,
+            onDismiss = machineViewModel::dismiss,
+        )
+    }
+
     grammar?.let { state ->
         GrammarSheet(
             state = state,
@@ -266,7 +298,10 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
     dictionaryLookup?.let { lookup ->
         DictionarySheet(
             lookup = lookup,
-            hasDictionaries = dictionaries.isNotEmpty(),
+            suggestions = dictionarySuggestions,
+            hasDictionaries = hasDictionaries,
+            onLookUp = dictionaryViewModel::lookUp,
+            onSuggest = dictionaryViewModel::suggest,
             onOpenDictionaries = {
                 dictionaryViewModel.dismissLookup()
                 managingDictionaries = true
@@ -293,8 +328,16 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
             defaultEdition = Kaikki.editions.find { it.name.equals(settings.translation.effectiveTargetLanguage, ignoreCase = true) }
                 ?: Kaikki.editions.first(),
             viewModel = dictionaryViewModel,
+            settings = settings.dictionaries,
+            onSettingsChange = viewModel::updateDictionarySettings,
             onDismiss = { managingDictionaries = false },
         )
+    }
+
+    statsBookId?.let { id ->
+        // Follows the library, so the numbers keep up while it's open.
+        val book = library?.books?.find { it.id == id }
+        if (book != null) ReadingStatsSheet(book = book, onDismiss = { statsBookId = null })
     }
 }
 

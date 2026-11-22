@@ -242,8 +242,9 @@ fun TranslationSection(
     }
 }
 
+/** A string with HTML links in it, which open in the browser. */
 @Composable
-private fun htmlString(id: Int): AnnotatedString {
+internal fun htmlString(id: Int): AnnotatedString {
     val html = stringResource(id)
     val linkStyle = SpanStyle(color = MaterialTheme.colorScheme.primary, textDecoration = TextDecoration.Underline)
     return remember(html, linkStyle) { AnnotatedString.fromHtml(html, TextLinkStyles(style = linkStyle)) }

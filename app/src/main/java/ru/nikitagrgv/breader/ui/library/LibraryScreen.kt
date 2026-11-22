@@ -28,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -36,7 +37,10 @@ import ru.nikitagrgv.breader.R
 import ru.nikitagrgv.breader.data.Book
 import ru.nikitagrgv.breader.data.Library
 import ru.nikitagrgv.breader.format.BookParser
+import ru.nikitagrgv.breader.ui.reader.formatCount
 import ru.nikitagrgv.breader.ui.reader.formatReadingTime
+import ru.nikitagrgv.breader.ui.reader.wordsProgress
+import kotlin.math.roundToInt
 
 /** Lives in the Scaffold's FAB slot, so snackbars push it up instead of covering it. */
 @Composable
@@ -55,6 +59,7 @@ fun LibraryScreen(
     contentPadding: PaddingValues,
     onOpenBook: (Book) -> Unit,
     onRemoveBook: (Book) -> Unit,
+    onShowStats: (Book) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -89,6 +94,7 @@ fun LibraryScreen(
                             isOpen = book.id == library.currentBookId,
                             onOpen = { onOpenBook(book) },
                             onRemove = { onRemoveBook(book) },
+                            onShowStats = { onShowStats(book) },
                             modifier = Modifier.animateItem(),
                         )
                     }
@@ -104,23 +110,32 @@ private fun BookItem(
     isOpen: Boolean,
     onOpen: () -> Unit,
     onRemove: () -> Unit,
+    onShowStats: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
-    val progress = if (book.progress > 0f) {
-        stringResource(R.string.progress_percent, book.progress * 100)
-    } else {
-        null
+    val started = book.progress > 0f
+    val progress = if (started) stringResource(R.string.progress_percent, book.progress * 100) else null
+    val words = book.wordCount?.let { total ->
+        if (started) {
+            wordsProgress((book.progress * total).roundToInt(), total)
+        } else {
+            pluralStringResource(R.plurals.words_total, total, formatCount(total))
+        }
     }
     ListItem(
         headlineContent = { Text(book.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
         supportingContent = {
-            Text(
-                text = listOfNotNull(book.author, book.format.name, progress, formatReadingTime(book.readingTimeMs))
-                    .joinToString(" · "),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Column {
+                Text(
+                    text = listOfNotNull(book.author, book.format.name).joinToString(" · "),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                // Where the reader is, in the words as well, so that it's clear how much is left.
+                val reading = listOfNotNull(progress, words, formatReadingTime(book.readingTimeMs)).joinToString(" · ")
+                if (reading.isNotEmpty()) Text(reading, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
         },
         leadingContent = { Icon(painterResource(R.drawable.ic_book), contentDescription = null) },
         trailingContent = {
@@ -129,6 +144,13 @@ private fun BookItem(
                     Icon(painterResource(R.drawable.ic_more_vert), contentDescription = stringResource(R.string.book_options))
                 }
                 DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.reading_stats)) },
+                        onClick = {
+                            menuExpanded = false
+                            onShowStats()
+                        },
+                    )
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.remove_from_library)) },
                         onClick = {

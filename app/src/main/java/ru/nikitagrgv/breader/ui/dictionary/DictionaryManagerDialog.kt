@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -31,6 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -45,12 +47,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ru.nikitagrgv.breader.R
+import ru.nikitagrgv.breader.data.DictionarySettings
 import ru.nikitagrgv.breader.dictionary.CatalogLanguage
 import ru.nikitagrgv.breader.dictionary.DictionaryInfo
 import ru.nikitagrgv.breader.dictionary.Download
@@ -58,15 +62,24 @@ import ru.nikitagrgv.breader.dictionary.DownloadError
 import ru.nikitagrgv.breader.dictionary.DownloadState
 import ru.nikitagrgv.breader.dictionary.Edition
 import ru.nikitagrgv.breader.dictionary.Kaikki
+import ru.nikitagrgv.breader.dictionary.OnlineDictionary
+import ru.nikitagrgv.breader.ui.settings.htmlString
 import ru.nikitagrgv.breader.dictionary.dictionaryId
 import java.text.NumberFormat
 
 /**
- * A full-screen list of the downloaded dictionaries and of the ones to download.
+ * A full-screen list of the online dictionaries to use, of the downloaded ones and of the ones to download.
  * @param defaultEdition the edition whose languages are listed first.
+ * @param onSettingsChange gets a function that makes the new settings out of the stored ones.
  */
 @Composable
-fun DictionaryManagerDialog(defaultEdition: Edition, viewModel: DictionaryViewModel, onDismiss: () -> Unit) {
+fun DictionaryManagerDialog(
+    defaultEdition: Edition,
+    viewModel: DictionaryViewModel,
+    settings: DictionarySettings,
+    onSettingsChange: ((DictionarySettings) -> DictionarySettings) -> Unit,
+    onDismiss: () -> Unit,
+) {
     var editionCode by rememberSaveable { mutableStateOf(defaultEdition.code) }
     val edition = Kaikki.editions.find { it.code == editionCode } ?: defaultEdition
     var query by rememberSaveable { mutableStateOf("") }
@@ -92,6 +105,9 @@ fun DictionaryManagerDialog(defaultEdition: Edition, viewModel: DictionaryViewMo
                 }
 
                 LazyColumn(Modifier.fillMaxSize()) {
+                    item { SectionHeader(R.string.dictionaries_online) }
+                    item { OnlineDictionaries(settings, onSettingsChange) }
+
                     // Downloads of dictionaries that aren't installed yet go along with the installed ones.
                     val pending = downloads.filterKeys { it !in installedIds }
                     if (installed.isNotEmpty() || pending.isNotEmpty()) {
@@ -163,6 +179,54 @@ fun DictionaryManagerDialog(defaultEdition: Edition, viewModel: DictionaryViewMo
         }
     }
 }
+
+@Composable
+private fun OnlineDictionaries(settings: DictionarySettings, onChange: ((DictionarySettings) -> DictionarySettings) -> Unit) {
+    // The field keeps its own text: the stored one comes back a moment later and would move the cursor.
+    var yandexKey by remember { mutableStateOf(settings.yandexKey) }
+    Column {
+        Text(
+            text = stringResource(R.string.dictionaries_online_summary),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 16.dp),
+        )
+        for (dictionary in OnlineDictionary.entries) {
+            val enabled = dictionary in settings.online
+            ListItem(
+                headlineContent = { Text(stringResource(dictionary.title)) },
+                supportingContent = { Text(stringResource(dictionary.summary)) },
+                trailingContent = { Switch(checked = enabled, onCheckedChange = null) },
+                modifier = Modifier.toggleable(value = enabled, role = Role.Switch) { on ->
+                    onChange { it.copy(online = if (on) it.online + dictionary else it.online - dictionary) }
+                },
+            )
+            if (dictionary == OnlineDictionary.YANDEX && enabled) {
+                OutlinedTextField(
+                    value = yandexKey,
+                    onValueChange = { value ->
+                        yandexKey = value
+                        onChange { it.copy(yandexKey = value) }
+                    },
+                    label = { Text(stringResource(R.string.yandex_key)) },
+                    supportingText = { Text(htmlString(R.string.yandex_key_hint)) },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                )
+            }
+        }
+    }
+}
+
+@get:StringRes
+private val OnlineDictionary.summary: Int
+    get() = when (this) {
+        OnlineDictionary.YANDEX -> R.string.online_yandex_summary
+        OnlineDictionary.GOOGLE -> R.string.online_google_summary
+        OnlineDictionary.WIKTIONARY -> R.string.online_wiktionary_summary
+    }
 
 private fun LazyListScope.languageItems(
     list: LanguageList?,

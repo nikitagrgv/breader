@@ -95,31 +95,38 @@ internal class SelectionHistoryWalker(
         return selected
     }
 
-    private suspend fun bringIntoView(target: BookSelection, freeArea: IntRange) {
-        val landing = (list.layoutInfo.viewportSize.height * JUMP_LANDING).roundToInt()
-        val start = target.start.paragraph
-        when (selection) {
-            is PdfSelection -> {
-                val rect = selection.book.loadedText(start)?.let { target.rectsOn(start, it).firstOrNull() }
-                val scale = viewport.pageWidth(viewport.width) / selection.book.pageSizes[start].width
-                coroutineScope {
-                    launch { list.glideTo(start, landing, freeArea) { ((rect?.top ?: 0f) * scale).roundToInt() } }
-                    if (rect != null) launch { viewport.animatePanToShow(rect.left * scale, rect.right * scale) }
-                }
-            }
-            is TextSelection -> {
-                // A place in a paragraph is known only roughly until it's laid out, which is good enough for landing.
-                val share = target.start.offset.toFloat() / selection.paragraphs[start].text.length.coerceAtLeast(1)
-                list.glideTo(start, landing, freeArea) { size -> ((size ?: 0) * share).roundToInt() }
-            }
-        }
-    }
+    private suspend fun bringIntoView(target: BookSelection, freeArea: IntRange) = bringIntoView(target, selection, list, viewport, freeArea)
 
     private suspend fun bringBack(origin: ReadingPosition) = coroutineScope {
         launch { viewport.animatePanTo(origin.pan.toFloat()) }
         list.glideTo(origin.paragraph, list.layoutInfo.beforeContentPadding, IntRange.EMPTY) { origin.offset }
         // Exactly where it was, whatever the rounding on the way.
         list.scrollToItem(origin.paragraph, origin.offset)
+    }
+}
+
+/**
+ * Brings [target] into view with a quick animation, unless it's in [freeArea] already. In a PDF, the page's text has to
+ * be read before, see [ReaderSelection.prepare].
+ * @param freeArea what part of the screen isn't covered by anything, in px.
+ */
+internal suspend fun bringIntoView(target: BookSelection, selection: ReaderSelection, list: LazyListState, viewport: PdfViewport, freeArea: IntRange) {
+    val landing = (list.layoutInfo.viewportSize.height * JUMP_LANDING).roundToInt()
+    val start = target.start.paragraph
+    when (selection) {
+        is PdfSelection -> {
+            val rect = selection.book.loadedText(start)?.let { target.rectsOn(start, it).firstOrNull() }
+            val scale = viewport.pageWidth(viewport.width) / selection.book.pageSizes[start].width
+            coroutineScope {
+                launch { list.glideTo(start, landing, freeArea) { ((rect?.top ?: 0f) * scale).roundToInt() } }
+                if (rect != null) launch { viewport.animatePanToShow(rect.left * scale, rect.right * scale) }
+            }
+        }
+        is TextSelection -> {
+            // A place in a paragraph is known only roughly until it's laid out, which is good enough for landing.
+            val share = target.start.offset.toFloat() / selection.paragraphs[start].text.length.coerceAtLeast(1)
+            list.glideTo(start, landing, freeArea) { size -> ((size ?: 0) * share).roundToInt() }
+        }
     }
 }
 

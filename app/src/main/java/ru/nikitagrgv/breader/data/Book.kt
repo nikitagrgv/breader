@@ -32,9 +32,29 @@ data class Book(
     val progress: Float = 0f,
     /** How long the book has been read: it was open in the reader and the app was in use. */
     val readingTimeMs: Long = 0,
+    /**
+     * How much of [readingTimeMs] was spent at each percent of the book, i.e. while the position was in it; [PERCENTS]
+     * of them, or none before anything is read. Kept since this was added, so it may add up to less than the total.
+     */
+    val timeByPercent: List<Long> = emptyList(),
+    /** The number of words in the book; null until they're counted, which is done when it's opened. */
+    val wordCount: Int? = null,
     /** What was selected in the book, the oldest first. */
     val selectionHistory: List<BookRange> = emptyList(),
 )
+
+/** What [Book.timeByPercent] splits a book into. */
+const val PERCENTS = 100
+
+/** The part of [Book.timeByPercent] that the position [progress] (0..1) is in. */
+fun percentOf(progress: Float): Int = (progress * PERCENTS).toInt().coerceIn(0, PERCENTS - 1)
+
+/** [Book.timeByPercent] with [ms] more at [percent]. */
+internal fun List<Long>.plusTime(percent: Int, ms: Long): List<Long> {
+    val times = if (size == PERCENTS) toMutableList() else MutableList(PERCENTS) { getOrElse(it) { 0L } }
+    times[percent] += ms
+    return times
+}
 
 /** Four numbers per range, as there may be a lot of them. */
 internal fun List<BookRange>.toInts(): List<Int> =

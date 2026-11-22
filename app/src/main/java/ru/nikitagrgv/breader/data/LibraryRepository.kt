@@ -89,13 +89,22 @@ class LibraryRepository(context: Context) {
             })
         }
 
-    fun addReadingTime(id: String, ms: Long) {
+    /** @param percent where in the book it was read, see [percentOf]; null if that isn't known. */
+    fun addReadingTime(id: String, ms: Long, percent: Int?) {
         if (ms <= 0) return
         mutate(saveDelayMs = 1_000) { library ->
             library.copy(books = library.books.map {
-                if (it.id == id) it.copy(readingTimeMs = it.readingTimeMs + ms) else it
+                if (it.id != id) return@map it
+                it.copy(
+                    readingTimeMs = it.readingTimeMs + ms,
+                    timeByPercent = if (percent == null) it.timeByPercent else it.timeByPercent.plusTime(percent, ms),
+                )
             })
         }
+    }
+
+    fun setWordCount(id: String, count: Int) = mutate { library ->
+        library.copy(books = library.books.map { if (it.id == id) it.copy(wordCount = count) else it })
     }
 
     fun updateSelectionHistory(id: String, history: List<BookRange>) =
@@ -180,6 +189,8 @@ class LibraryRepository(context: Context) {
         .put("pan", position.pan)
         .put("progress", progress.toDouble())
         .put("readingTime", readingTimeMs)
+        .apply { if (timeByPercent.isNotEmpty()) put("timeByPercent", JSONArray(timeByPercent)) }
+        .apply { if (wordCount != null) put("words", wordCount) }
         .put("selectionHistory", JSONArray(selectionHistory.toInts()))
 
     private fun JSONObject.toBook() = Book(
@@ -193,6 +204,10 @@ class LibraryRepository(context: Context) {
         position = ReadingPosition(optInt("paragraph"), optInt("offset"), optDouble("zoom", 1.0).toFloat(), optInt("pan")),
         progress = optDouble("progress", 0.0).toFloat(),
         readingTimeMs = optLong("readingTime"),
+        timeByPercent = optJSONArray("timeByPercent")
+            ?.let { array -> List(PERCENTS) { array.optLong(it).coerceAtLeast(0) } }
+            .orEmpty(),
+        wordCount = if (has("words")) optInt("words").coerceAtLeast(0) else null,
         selectionHistory = optJSONArray("selectionHistory")
             ?.let { array -> rangesFromInts((0 until array.length()).map { array.optInt(it, -1) }) }
             .orEmpty(),

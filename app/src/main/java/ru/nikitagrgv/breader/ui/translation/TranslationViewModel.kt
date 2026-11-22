@@ -18,9 +18,10 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
+import org.json.JSONException
 import ru.nikitagrgv.breader.BreaderApplication
 import ru.nikitagrgv.breader.data.TranslationSettings
-import ru.nikitagrgv.breader.dictionary.DictionaryRepository
+import ru.nikitagrgv.breader.dictionary.Dictionaries
 import ru.nikitagrgv.breader.dictionary.DictionaryResult
 import ru.nikitagrgv.breader.dictionary.meaningsLine
 import ru.nikitagrgv.breader.translation.Excerpt
@@ -30,6 +31,7 @@ import ru.nikitagrgv.breader.translation.Translation
 import ru.nikitagrgv.breader.translation.TranslationCache
 import ru.nikitagrgv.breader.translation.TranslationKey
 import ru.nikitagrgv.breader.translation.TranslationPrompt
+import ru.nikitagrgv.breader.web.WebServiceException
 import java.io.IOException
 import java.net.SocketTimeoutException
 
@@ -51,7 +53,7 @@ data class TranslationState(
     val models: List<String>,
     /** Results by model, in the order they came; the models that have none yet are waited for. */
     val results: Map<String, ModelResult>,
-    /** What the downloaded dictionaries have for the fragment. */
+    /** What the dictionaries have for the fragment; the online ones add theirs as they come. */
     val dictionary: List<DictionaryResult> = emptyList(),
     /** False when only the cache is looked in: without auto-translation, a selection costs no requests. */
     val modelsAsked: Boolean = true,
@@ -73,7 +75,7 @@ data class TranslationState(
 class TranslationViewModel(
     private val openRouter: OpenRouter,
     private val cache: TranslationCache,
-    private val dictionaries: DictionaryRepository,
+    private val dictionaries: Dictionaries,
 ) : ViewModel() {
     private val state = MutableStateFlow<TranslationState?>(null)
 
@@ -188,8 +190,7 @@ class TranslationViewModel(
             modelsAsked = askModels,
         )
         viewModelScope.launch(requests) {
-            val found = dictionaries.lookup(excerpt.fragment)
-            if (found.isNotEmpty()) state.update { it?.copy(dictionary = found) }
+            dictionaries.lookup(excerpt.fragment).collect { progress -> state.update { it?.copy(dictionary = progress.results) } }
         }
         if (models.isEmpty()) return
         // The cache is ready long before anything is selected, so the cached results show at once.
@@ -252,7 +253,7 @@ class TranslationViewModel(
         val Factory = viewModelFactory {
             initializer {
                 val app = this[APPLICATION_KEY] as BreaderApplication
-                TranslationViewModel(app.openRouter, app.translationCache, app.dictionaryRepository)
+                TranslationViewModel(app.openRouter, app.translationCache, app.dictionaries)
             }
         }
     }
@@ -267,6 +268,13 @@ internal fun Exception.toTranslationError(): TranslationError {
             429 -> TranslationError.Kind.RATE_LIMITED
             else -> return TranslationError(TranslationError.Kind.OTHER, message)
         }
+        // The free services, which have no keys of their own, report 401 only for a key given to them.
+        is WebServiceException -> when (code) {
+            401 -> TranslationError.Kind.INVALID_KEY
+            429 -> TranslationError.Kind.RATE_LIMITED
+            else -> return TranslationError(TranslationError.Kind.OTHER, message)
+        }
+        is JSONException -> TranslationError.Kind.BAD_REPLY
         is SocketTimeoutException -> TranslationError.Kind.TIMEOUT
         is IOException -> TranslationError.Kind.NETWORK
         else -> return TranslationError(TranslationError.Kind.OTHER, message ?: javaClass.simpleName)
