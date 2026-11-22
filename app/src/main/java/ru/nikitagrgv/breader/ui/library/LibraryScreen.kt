@@ -37,6 +37,7 @@ import ru.nikitagrgv.breader.R
 import ru.nikitagrgv.breader.data.Book
 import ru.nikitagrgv.breader.data.Library
 import ru.nikitagrgv.breader.format.BookParser
+import ru.nikitagrgv.breader.ui.DotSeparatedText
 import ru.nikitagrgv.breader.ui.reader.formatCount
 import ru.nikitagrgv.breader.ui.reader.formatReadingTime
 import ru.nikitagrgv.breader.ui.reader.wordsProgress
@@ -133,8 +134,7 @@ private fun BookItem(
                     overflow = TextOverflow.Ellipsis,
                 )
                 // Where the reader is, in the words as well, so that it's clear how much is left.
-                val reading = listOfNotNull(progress, words, formatReadingTime(book.readingTimeMs)).joinToString(" · ")
-                if (reading.isNotEmpty()) Text(reading, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                DotSeparatedText(listOfNotNull(progress, words, formatReadingTime(book.readingTimeMs)))
             }
         },
         leadingContent = { Icon(painterResource(R.drawable.ic_book), contentDescription = null) },

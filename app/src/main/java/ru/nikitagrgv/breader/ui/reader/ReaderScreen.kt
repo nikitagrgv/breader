@@ -125,6 +125,7 @@ import ru.nikitagrgv.breader.format.Paragraph
 import ru.nikitagrgv.breader.format.ParagraphKind
 import ru.nikitagrgv.breader.format.PdfBook
 import ru.nikitagrgv.breader.translation.BookSelection
+import ru.nikitagrgv.breader.ui.DotSeparatedText
 import ru.nikitagrgv.breader.ui.translation.TranslationPreview
 import ru.nikitagrgv.breader.ui.translation.TranslationState
 import kotlin.math.roundToInt
@@ -459,7 +460,7 @@ private fun BookText(
             val wordsRead = wordCount?.let { total -> progress?.let { wordsProgress((it * total).roundToInt(), total) } }
             ReaderTopBar(
                 title = state.title,
-                details = listOfNotNull(position, wordsRead, formatReadingTime(readingTimeMs)).joinToString(" · ").ifEmpty { null },
+                details = listOfNotNull(position, wordsRead, formatReadingTime(readingTimeMs)),
                 cornerSpace = if (historyOn) SelectionHistoryButtonsWidth else 0.dp,
                 onSearch = {
                     searchOpen = true
@@ -835,50 +836,52 @@ private fun rememberParagraphLooks(settings: ReaderSettings): Map<ParagraphKind,
     }
 }
 
-/** @param details where the reader is in the book and how long it's been read. */
+/**
+ * The title with the actions, and under them where the reader is in the book and how long it's been read. The details
+ * have a row of their own, the whole width of the screen: next to the title and the buttons, they wouldn't fit.
+ * @param details the pieces of it, shown separated by dots.
+ */
 @Composable
 private fun ReaderTopBar(
     title: String,
-    details: String?,
+    details: List<String>,
     cornerSpace: Dp,
     onSearch: () -> Unit,
     onShowStats: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Surface(color = MaterialTheme.colorScheme.surfaceContainer, modifier = modifier.fillMaxWidth()) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
+        Column(
+            Modifier
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
-                // The buttons going through the selections are shown over the right end.
-                .absolutePadding(left = 16.dp, right = 4.dp + cornerSpace, top = 4.dp, bottom = 4.dp),
+                .absolutePadding(left = 16.dp, right = 4.dp, top = 4.dp, bottom = 8.dp),
         ) {
-            Column(
-                Modifier
-                    .weight(1f)
-                    .padding(vertical = 4.dp),
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                // The buttons going through the selections are shown over the right end. They're no taller than this row.
+                modifier = Modifier.absolutePadding(right = cornerSpace),
             ) {
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
                 )
-                if (details != null) {
-                    Text(
-                        text = details,
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                IconButton(onClick = onSearch) {
+                    Icon(painterResource(R.drawable.ic_search), contentDescription = stringResource(R.string.search_in_book))
+                }
+                IconButton(onClick = onShowStats) {
+                    Icon(painterResource(R.drawable.ic_bar_chart), contentDescription = stringResource(R.string.reading_stats))
                 }
             }
-            IconButton(onClick = onSearch) {
-                Icon(painterResource(R.drawable.ic_search), contentDescription = stringResource(R.string.search_in_book))
-            }
-            IconButton(onClick = onShowStats) {
-                Icon(painterResource(R.drawable.ic_bar_chart), contentDescription = stringResource(R.string.reading_stats))
+            if (details.isNotEmpty()) {
+                DotSeparatedText(
+                    parts = details,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.absolutePadding(right = 12.dp),
+                )
             }
         }
     }
