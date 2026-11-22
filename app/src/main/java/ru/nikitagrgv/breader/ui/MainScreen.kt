@@ -99,6 +99,19 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
     val readerState by viewModel.reader.collectAsStateWithLifecycle()
     val library by viewModel.library.collectAsStateWithLifecycle()
     val readerSettings = remember(settings) { settings.toReaderSettings() }
+
+    /** Adds the word to the favorites with its meanings, or asks whether to remove it, if it's one of them. */
+    fun toggleFavorite(text: String) {
+        val favorite = favorites.find { it.key == favoriteKey(text) }
+        if (favorite != null) {
+            removingFavorite = favorite
+        } else {
+            favoritesViewModel.add(text) {
+                val message = if (hasDictionaries) R.string.favorite_not_found else R.string.favorites_need_dictionary
+                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
     val openBook = library?.books?.find { it.id == readerState.bookId }
     var tab by rememberSaveable { mutableStateOf(MainTab.READER) }
     // Hidden to begin with, as the app opens on the book being read.
@@ -205,18 +218,7 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
                         machineViewModel.translate(selection.excerpt(contextWords = 0).fragment, settings.translation)
                     },
                     favoriteKeys = favoriteKeys,
-                    onFavorite = { selection ->
-                        val text = selection.excerpt(contextWords = 0).fragment
-                        val favorite = favorites.find { it.key == favoriteKey(text) }
-                        if (favorite != null) {
-                            removingFavorite = favorite
-                        } else {
-                            favoritesViewModel.add(text) {
-                                val message = if (hasDictionaries) R.string.favorite_not_found else R.string.favorites_need_dictionary
-                                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
-                            }
-                        }
-                    },
+                    onFavorite = { selection -> toggleFavorite(selection.excerpt(contextWords = 0).fragment) },
                     moreSelectionActions = settings.moreSelectionActions,
                     onMoreSelectionActionsChange = viewModel::setMoreSelectionActions,
                     selectionFadeMs = settings.selectionFadeMs,
@@ -300,6 +302,8 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
             lookup = lookup,
             suggestions = dictionarySuggestions,
             hasDictionaries = hasDictionaries,
+            favorite = favoriteKey(lookup.text) in favoriteKeys,
+            onFavorite = { toggleFavorite(lookup.text) },
             onLookUp = dictionaryViewModel::lookUp,
             onSuggest = dictionaryViewModel::suggest,
             onOpenDictionaries = {

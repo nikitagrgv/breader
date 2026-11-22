@@ -267,7 +267,7 @@
     <string name="dictionary_needs_source_language">set the book language in “Translate from” in the settings</string>
 
     <string name="favorites_title">Favorites</string>
-    <string name="favorites_empty">No favorites yet.\nSelect a word in a book and tap the star to keep it here.</string>
+    <string name="favorites_empty">No favorites yet.\nSelect a word in a book, or look one up with the search button above, and tap the star to keep it here.</string>
     <string name="favorite_not_found">The dictionaries have nothing for it, so it can\'t be kept.</string>
     <string name="favorites_need_dictionary">Favorites are words from the dictionaries. Download one or turn on the online ones in the settings first.</string>
     <string name="look_up_word">Look up a word</string>

@@ -20,6 +20,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -52,12 +53,15 @@ import ru.nikitagrgv.breader.ui.BottomSheet
  * The dictionary entries of a text in detail: all the senses with examples. The text is in a field, so that another
  * word can be looked up from here: the words of the downloaded dictionaries that start with what's typed are offered.
  * @param hasDictionaries whether any are downloaded or online; if not, [onOpenDictionaries] is offered.
+ * @param favorite whether the looked up word is one of the favorites, which the star by the field adds it to.
  */
 @Composable
 fun DictionarySheet(
     lookup: DictionaryLookup,
     suggestions: List<String>,
     hasDictionaries: Boolean,
+    favorite: Boolean,
+    onFavorite: () -> Unit,
     onLookUp: (String) -> Unit,
     onSuggest: (String) -> Unit,
     onOpenDictionaries: () -> Unit,
@@ -89,30 +93,30 @@ fun DictionarySheet(
                 .verticalScroll(rememberScrollState())
                 .padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
         ) {
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                placeholder = { Text(stringResource(R.string.dictionary_search)) },
-                leadingIcon = { Icon(painterResource(R.drawable.ic_search), contentDescription = null) },
-                trailingIcon = if (query.isNotEmpty()) {
-                    {
-                        IconButton(onClick = {
-                            query = ""
-                            focus.requestFocus()
-                        }) {
-                            Icon(painterResource(R.drawable.ic_close), contentDescription = stringResource(R.string.clear_search))
-                        }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SearchField(
+                    query = query,
+                    onQueryChange = { query = it },
+                    onSearch = { submit(query) },
+                    onClear = {
+                        query = ""
+                        focus.requestFocus()
+                    },
+                    focus = focus,
+                    modifier = Modifier.weight(1f),
+                )
+                // For what's looked up, not for what's being typed; a word that nothing is found for has no meanings to keep.
+                val results = lookup.results
+                if (!editing && lookup.text.isNotEmpty() && (favorite || !results.isNullOrEmpty())) {
+                    IconButton(onClick = onFavorite, modifier = Modifier.padding(start = 4.dp)) {
+                        Icon(
+                            painterResource(if (favorite) R.drawable.ic_star else R.drawable.ic_star_outline),
+                            contentDescription = stringResource(if (favorite) R.string.remove_from_favorites else R.string.add_to_favorites),
+                            tint = if (favorite) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                        )
                     }
-                } else {
-                    null
-                },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { submit(query) }),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .focusRequester(focus),
-            )
+                }
+            }
             Spacer(Modifier.height(16.dp))
             when {
                 editing -> Suggestions(suggestions, onPick = ::submit)
@@ -121,6 +125,36 @@ fun DictionarySheet(
             }
         }
     }
+}
+
+@Composable
+private fun SearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onSearch: () -> Unit,
+    onClear: () -> Unit,
+    focus: FocusRequester,
+    modifier: Modifier = Modifier,
+) {
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        placeholder = { Text(stringResource(R.string.dictionary_search)) },
+        leadingIcon = { Icon(painterResource(R.drawable.ic_search), contentDescription = null) },
+        trailingIcon = if (query.isNotEmpty()) {
+            {
+                IconButton(onClick = onClear) {
+                    Icon(painterResource(R.drawable.ic_close), contentDescription = stringResource(R.string.clear_search))
+                }
+            }
+        } else {
+            null
+        },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(onSearch = { onSearch() }),
+        modifier = modifier.focusRequester(focus),
+    )
 }
 
 @Composable
