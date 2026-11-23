@@ -129,13 +129,43 @@ data class TranslationSettings(
     }
 }
 
-/** Dictionaries on the web, which are asked along with the downloaded ones. */
+/** Which dictionaries are used, the downloaded ones and the ones on the web, and the order of their results. */
 data class DictionarySettings(
+    /** The online dictionaries that are turned on. */
     val online: Set<OnlineDictionary> = OnlineDictionary.entries.toSet(),
     /** The user's key for [OnlineDictionary.YANDEX], which isn't asked without it. */
     val yandexKey: String = "",
+    /** The IDs of the downloaded dictionaries that are turned off: they stay downloaded, but aren't looked in. */
+    val disabled: Set<String> = emptySet(),
+    /**
+     * The dictionaries by their [orderKey]s, in the order their results are shown; empty for the default one: the
+     * downloaded dictionaries first, in the order they were installed, then the online ones.
+     */
+    val order: List<String> = emptyList(),
 ) {
-    /** The ones that can be asked. */
+    /** The online ones that can be asked, in the [order]. */
     val usable: List<OnlineDictionary>
-        get() = OnlineDictionary.entries.filter { it in online && (it != OnlineDictionary.YANDEX || yandexKey.isNotBlank()) }
+        get() = ordered(OnlineDictionary.entries.filter { it in online && (it != OnlineDictionary.YANDEX || yandexKey.isNotBlank()) }) {
+            it.orderKey
+        }
+
+    /**
+     * [items], in the default order, sorted by the [order]; the ones that it doesn't have, like a dictionary
+     * downloaded after it was set, keep their default order after the others.
+     */
+    fun <T> ordered(items: List<T>, key: (T) -> String): List<T> {
+        if (order.isEmpty()) return items
+        val ranks = order.withIndex().associate { (index, key) -> key to index }
+        return items.sortedBy { ranks[key(it)] ?: Int.MAX_VALUE }
+    }
+
+    /** Without the settings of a downloaded dictionary that is removed: downloaded again, it's like a new one. */
+    fun forget(id: String): DictionarySettings = copy(disabled = disabled - id, order = order - downloadedOrderKey(id))
 }
+
+/** What [DictionarySettings.order] calls an online dictionary. */
+val OnlineDictionary.orderKey: String
+    get() = "online:$name"
+
+/** What [DictionarySettings.order] calls the downloaded dictionary with the [id]. */
+fun downloadedOrderKey(id: String): String = "downloaded:$id"

@@ -212,10 +212,13 @@
 
     <string name="dictionaries_title">Dictionaries</string>
     <string name="manage_dictionaries">Manage dictionaries</string>
-    <string name="dictionaries_summary_none">None downloaded. Download dictionaries to look up words offline.</string>
-    <string name="dictionaries_summary_online">Online: %1$s</string>
+    <string name="dictionaries_summary_none">None in use. Download dictionaries to look up words offline, or turn on the online ones.</string>
+    <string name="dictionaries_summary">In this order: %1$s</string>
+    <string name="dictionaries_yours">Your dictionaries</string>
+    <string name="dictionaries_yours_summary">Looked in whenever a word is selected or looked up, and their results are shown in this order. To move a dictionary, drag it by the handle on the left. One that\'s turned off stays downloaded. The online ones get the words you look up.</string>
     <string name="dictionaries_online">Online</string>
-    <string name="dictionaries_online_summary">Asked along with the downloaded dictionaries, whenever a word is looked up or selected. The words are sent to these services.</string>
+    <string name="move_up">Move up</string>
+    <string name="move_down">Move down</string>
     <string name="online_yandex">Yandex Dictionary</string>
     <string name="online_yandex_summary">Translations with synonyms and examples, for pairs of languages mostly with Russian or English. Needs a free key and the book language set in “Translate from”.</string>
     <string name="online_google">Google Translate</string>
@@ -224,10 +227,6 @@
     <string name="online_wiktionary_summary">English Wiktionary online, the largest one: words of every language explained in English.</string>
     <string name="yandex_key">Yandex Dictionary key</string>
     <string name="yandex_key_hint">Get one for free at &lt;a href="https://yandex.ru/dev/dictionary/keys/get/?service=dict"&gt;yandex.ru/dev/dictionary&lt;/a&gt;</string>
-    <plurals name="dictionaries_summary">
-        <item quantity="one">%1$d downloaded</item>
-        <item quantity="other">%1$d downloaded</item>
-    </plurals>
     <string name="dictionaries_downloaded">Downloaded</string>
     <string name="dictionaries_available">Download</string>
     <string name="dictionaries_edition_summary">Pick the language the words are explained in, then the language of the words.</string>
@@ -259,8 +258,9 @@
     <string name="dictionary_error_other">Couldn\'t make the dictionary.</string>
     <string name="dictionary_source">%1$s · %2$s Wiktionary</string>
     <string name="dictionary_nothing_found">The dictionaries have nothing for it.</string>
-    <string name="dictionary_none">No dictionaries: download one or turn on the online ones.</string>
+    <string name="dictionary_none">No dictionaries to look in: download one, or turn on the ones you have.</string>
     <string name="dictionary_search">Look up a word</string>
+    <string name="look_up">Look up</string>
     <string name="dictionary_search_hint">Press search on the keyboard to look it up.</string>
     <string name="dictionary_asking">Asking %1$s…</string>
     <string name="dictionary_failed">%1$s: %2$s</string>
@@ -269,7 +269,7 @@
     <string name="favorites_title">Favorites</string>
     <string name="favorites_empty">No favorites yet.\nSelect a word in a book, or look one up with the search button above, and tap the star to keep it here.</string>
     <string name="favorite_not_found">The dictionaries have nothing for it, so it can\'t be kept.</string>
-    <string name="favorites_need_dictionary">Favorites are words from the dictionaries. Download one or turn on the online ones in the settings first.</string>
+    <string name="favorites_need_dictionary">Favorites are words from the dictionaries. Download one, or turn on the ones you have, in the settings first.</string>
     <string name="look_up_word">Look up a word</string>
     <string name="favorite_remove_title">Remove “%1$s” from the favorites?</string>
     <plurals name="favorites_remove_title">

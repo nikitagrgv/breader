@@ -14,7 +14,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.contextmenu.builder.item
+import androidx.compose.foundation.text.contextmenu.modifier.appendTextContextMenuComponents
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.text.selection.rememberSelectionState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
@@ -121,7 +124,7 @@ fun DictionarySheet(
             when {
                 editing -> Suggestions(suggestions, onPick = ::submit)
                 lookup.text.isEmpty() -> Unit
-                else -> Results(lookup, hasDictionaries, onOpenDictionaries)
+                else -> Results(lookup, hasDictionaries, onOpenDictionaries, onLookUp = ::submit)
             }
         }
     }
@@ -181,16 +184,31 @@ private fun Suggestions(suggestions: List<String>, onPick: (String) -> Unit) {
     }
 }
 
+/** @param onLookUp gets the text selected in the entries, to be looked up in turn: explanations have words to look up too. */
 @Composable
-private fun Results(lookup: DictionaryLookup, hasDictionaries: Boolean, onOpenDictionaries: () -> Unit) {
+private fun Results(lookup: DictionaryLookup, hasDictionaries: Boolean, onOpenDictionaries: () -> Unit, onLookUp: (String) -> Unit) {
     val results = lookup.results
     if (results == null) {
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         return
     }
+    val selection = rememberSelectionState()
+    val lookUpLabel = stringResource(R.string.look_up)
     Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
         if (results.isNotEmpty()) {
-            SelectionContainer {
+            SelectionContainer(
+                state = selection,
+                // Next to Copy in the menu of the selection.
+                modifier = Modifier.appendTextContextMenuComponents {
+                    item(key = LookUpMenuItem, label = lookUpLabel, leadingIcon = R.drawable.ic_dictionary) {
+                        // One text per line of the entries that the selection runs over.
+                        val text = selection.selectedTexts.joinToString(" ") { it.text }.replace(WHITESPACE, " ").trim()
+                        close()
+                        selection.clear()
+                        if (text.isNotEmpty()) onLookUp(text)
+                    }
+                },
+            ) {
                 Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
                     results.forEach { Result(it) }
                 }
@@ -233,14 +251,15 @@ private fun Results(lookup: DictionaryLookup, hasDictionaries: Boolean, onOpenDi
     }
 }
 
+private data object LookUpMenuItem
+
+private val WHITESPACE = Regex("\\s+")
+
 @Composable
 private fun Result(result: DictionaryResult) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(
-            text = when (val source = result.source) {
-                is DictionarySource.Downloaded -> stringResource(R.string.dictionary_source, source.info.name, source.info.edition.name)
-                is DictionarySource.Online -> stringResource(source.dictionary.title)
-            },
+            text = dictionaryTitle(result.source),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.primary,
         )
@@ -307,6 +326,13 @@ private fun Entry(entry: DictionaryEntry) {
             }
         }
     }
+}
+
+/** The name of a downloaded dictionary with the Wiktionary it's made from, or the name of an online one. */
+@Composable
+fun dictionaryTitle(source: DictionarySource): String = when (source) {
+    is DictionarySource.Downloaded -> stringResource(R.string.dictionary_source, source.info.name, source.info.edition.name)
+    is DictionarySource.Online -> stringResource(source.dictionary.title)
 }
 
 @get:StringRes

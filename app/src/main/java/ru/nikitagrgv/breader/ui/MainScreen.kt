@@ -44,6 +44,7 @@ import ru.nikitagrgv.breader.data.AppSettings
 import ru.nikitagrgv.breader.data.Favorite
 import ru.nikitagrgv.breader.data.favoriteKey
 import ru.nikitagrgv.breader.dictionary.Kaikki
+import ru.nikitagrgv.breader.dictionary.inUse
 import ru.nikitagrgv.breader.ui.dictionary.DictionaryManagerDialog
 import ru.nikitagrgv.breader.ui.dictionary.DictionarySheet
 import ru.nikitagrgv.breader.ui.dictionary.DictionaryViewModel
@@ -86,7 +87,8 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
     val dictionaryLookup by dictionaryViewModel.lookup.collectAsStateWithLifecycle()
     val dictionaries by dictionaryViewModel.installed.collectAsStateWithLifecycle()
     val dictionarySuggestions by dictionaryViewModel.suggestions.collectAsStateWithLifecycle()
-    val hasDictionaries = dictionaries.isNotEmpty() || settings.dictionaries.usable.isNotEmpty()
+    val dictionariesInUse = remember(dictionaries, settings.dictionaries) { settings.dictionaries.inUse(dictionaries) }
+    val hasDictionaries = dictionariesInUse.isNotEmpty()
     var managingDictionaries by rememberSaveable { mutableStateOf(false) }
     // The book whose reading statistics are shown.
     var statsBookId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -252,8 +254,7 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
                     onTranslationChange = viewModel::updateTranslationSettings,
                     cachedTranslations = cachedTranslations,
                     onClearTranslationCache = translationViewModel::clearCache,
-                    dictionaries = dictionaries.size,
-                    onlineDictionaries = settings.dictionaries.usable,
+                    dictionariesInUse = dictionariesInUse,
                     onOpenDictionaries = { managingDictionaries = true },
                 )
             }

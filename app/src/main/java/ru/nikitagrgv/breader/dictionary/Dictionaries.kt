@@ -12,6 +12,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONException
 import ru.nikitagrgv.breader.data.AppSettings
+import ru.nikitagrgv.breader.data.DictionarySettings
 import ru.nikitagrgv.breader.web.GoogleTranslate
 import ru.nikitagrgv.breader.web.WebServiceException
 import ru.nikitagrgv.breader.web.WiktionaryApi
@@ -19,7 +20,7 @@ import ru.nikitagrgv.breader.web.YandexDictionary
 import java.io.IOException
 import java.net.SocketTimeoutException
 
-/** Dictionaries on the web, in the order their results are shown: the ones that translate first. */
+/** Dictionaries on the web, in the default order of their results: the ones that translate first. */
 enum class OnlineDictionary {
     /** Translations with synonyms and examples. Needs a free key the user gets from Yandex. */
     YANDEX,
@@ -49,7 +50,7 @@ data class LookupFailure(val kind: Kind, val details: String? = null) {
 
 /**
  * What a lookup has found so far.
- * @param results the downloaded dictionaries' first, then the online ones' in their order.
+ * @param results in the order of the settings.
  * @param pending the online dictionaries that are still being asked.
  * @param failed the online dictionaries that couldn't be asked.
  */
@@ -58,6 +59,23 @@ data class LookupProgress(
     val pending: List<OnlineDictionary> = emptyList(),
     val failed: Map<OnlineDictionary, LookupFailure> = emptyMap(),
 )
+
+/** All the dictionaries, the [installed] ones and the online ones, turned on or not, in the order of the settings. */
+fun DictionarySettings.all(installed: List<DictionaryInfo>): List<DictionarySource> =
+    ordered(installed.map { DictionarySource.Downloaded(it) } + OnlineDictionary.entries.map { DictionarySource.Online(it) }) {
+        it.orderKey
+    }
+
+/** The dictionaries that are looked in, of the [installed] ones and the online ones, in the order of the settings. */
+fun DictionarySettings.inUse(installed: List<DictionaryInfo>): List<DictionarySource> {
+    val usable = usable.toSet()
+    return all(installed).filter { source ->
+        when (source) {
+            is DictionarySource.Downloaded -> source.info.id !in disabled
+            is DictionarySource.Online -> source.dictionary in usable
+        }
+    }
+}
 
 /** The downloaded dictionaries together with the online ones, as the settings have them. */
 class Dictionaries(private val downloaded: DictionaryRepository, private val settings: Flow<AppSettings>) {
@@ -71,21 +89,24 @@ class Dictionaries(private val downloaded: DictionaryRepository, private val set
      */
     fun lookup(text: String): Flow<LookupProgress> = channelFlow {
         val settings = settings.first()
-        val local = downloaded.lookup(text)
+        val dictionaries = settings.dictionaries
+        val local = downloaded.lookup(text, skip = dictionaries.disabled)
         // Quotes and punctuation around a word are often selected along with it.
         val bare = text.trim { !it.isLetterOrDigit() }
-        val online = if (bare.isEmpty() || bare.length > MAX_LOOKUP_LENGTH) emptyList() else settings.dictionaries.usable
+        val online = if (bare.isEmpty() || bare.length > MAX_LOOKUP_LENGTH) emptyList() else dictionaries.usable
         if (online.isEmpty()) {
-            send(LookupProgress(local))
+            send(LookupProgress(dictionaries.ordered(local) { it.source.orderKey }))
             return@channelFlow
         }
         val found = HashMap<OnlineDictionary, List<DictionaryEntry>>()
         val failed = LinkedHashMap<OnlineDictionary, LookupFailure>()
         val mutex = Mutex()
         fun progress() = LookupProgress(
-            results = local + online.mapNotNull { dictionary ->
-                found[dictionary]?.takeIf { it.isNotEmpty() }?.let { DictionaryResult(DictionarySource.Online(dictionary), it) }
-            },
+            results = dictionaries.ordered(
+                local + online.mapNotNull { dictionary ->
+                    found[dictionary]?.takeIf { it.isNotEmpty() }?.let { DictionaryResult(DictionarySource.Online(dictionary), it) }
+                },
+            ) { it.source.orderKey },
             pending = online.filter { it !in found && it !in failed },
             failed = failed.toMap(),
         )
@@ -115,6 +136,10 @@ class Dictionaries(private val downloaded: DictionaryRepository, private val set
         withTimeoutOrNull(timeoutMs) { lookup(text).collect { found = it.results } }
         return found
     }
+
+    /** Words of the downloaded dictionaries that are turned on that start with [prefix], for completing what's being typed. */
+    suspend fun wordsStartingWith(prefix: String, limit: Int): List<String> =
+        downloaded.wordsStartingWith(prefix, limit, skip = settings.first().dictionaries.disabled)
 
     private suspend fun ask(dictionary: OnlineDictionary, text: String, settings: AppSettings): List<DictionaryEntry> {
         val translation = settings.translation

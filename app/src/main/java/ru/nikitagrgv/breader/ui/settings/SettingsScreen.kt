@@ -44,9 +44,9 @@ import ru.nikitagrgv.breader.data.AppTheme
 import ru.nikitagrgv.breader.data.ReaderFont
 import ru.nikitagrgv.breader.data.SeekBarPosition
 import ru.nikitagrgv.breader.data.TranslationSettings
-import ru.nikitagrgv.breader.dictionary.OnlineDictionary
+import ru.nikitagrgv.breader.dictionary.DictionarySource
 import ru.nikitagrgv.breader.translation.MachineTranslationService
-import ru.nikitagrgv.breader.ui.dictionary.title
+import ru.nikitagrgv.breader.ui.dictionary.dictionaryTitle
 import ru.nikitagrgv.breader.ui.reader.ReaderTextPreview
 import ru.nikitagrgv.breader.ui.reader.fontFamily
 import ru.nikitagrgv.breader.ui.reader.toReaderSettings
@@ -92,8 +92,7 @@ fun SettingsScreen(
     onTranslationChange: ((TranslationSettings) -> TranslationSettings) -> Unit,
     cachedTranslations: Int,
     onClearTranslationCache: () -> Unit,
-    dictionaries: Int,
-    onlineDictionaries: List<OnlineDictionary>,
+    dictionariesInUse: List<DictionarySource>,
     onOpenDictionaries: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -294,18 +293,13 @@ fun SettingsScreen(
         ListItem(
             headlineContent = { Text(stringResource(R.string.manage_dictionaries)) },
             supportingContent = {
-                val downloaded = if (dictionaries == 0) {
-                    stringResource(R.string.dictionaries_summary_none)
-                } else {
-                    pluralStringResource(R.plurals.dictionaries_summary, dictionaries, dictionaries)
-                }
-                val online = onlineDictionaries.map { stringResource(it.title) }
-                val summary = if (online.isEmpty()) {
-                    downloaded
-                } else {
-                    listOf(downloaded, stringResource(R.string.dictionaries_summary_online, online.joinToString())).joinToString("\n")
-                }
-                Text(summary)
+                Text(
+                    if (dictionariesInUse.isEmpty()) {
+                        stringResource(R.string.dictionaries_summary_none)
+                    } else {
+                        stringResource(R.string.dictionaries_summary, dictionariesInUse.map { dictionaryTitle(it) }.joinToString())
+                    },
+                )
             },
             modifier = Modifier.clickable(onClick = onOpenDictionaries),
         )

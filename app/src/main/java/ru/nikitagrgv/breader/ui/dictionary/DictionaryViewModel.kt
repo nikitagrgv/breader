@@ -115,7 +115,7 @@ class DictionaryViewModel(private val repository: DictionaryRepository, private 
         }
         suggestionsJob = viewModelScope.launch {
             delay(SUGGESTIONS_DELAY_MS)
-            _suggestions.value = repository.wordsStartingWith(prefix, MAX_SUGGESTIONS)
+            _suggestions.value = dictionaries.wordsStartingWith(prefix, MAX_SUGGESTIONS)
         }
     }
 

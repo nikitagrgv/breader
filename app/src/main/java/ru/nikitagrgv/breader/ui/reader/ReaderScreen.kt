@@ -515,6 +515,8 @@ private fun BookText(
             (translationPreview ?: lastPreview.value)?.let {
                 TranslationPreview(
                     state = it,
+                    // As the dictionary button does.
+                    onOpenDictionary = { openDialog(onLookUp) },
                     cornerSpace = if (historyOn) DpSize(SelectionHistoryButtonsWidth, HISTORY_BUTTONS_ROW_HEIGHT) else DpSize.Zero,
                     modifier = Modifier
                         .heightIn(max = previewMaxHeight)

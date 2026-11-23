@@ -104,6 +104,8 @@ class SettingsRepository(context: Context) {
             val settings = transform(prefs.dictionarySettings())
             prefs[ONLINE_DICTIONARIES] = settings.online.joinToString(",") { it.name }
             prefs[YANDEX_KEY] = settings.yandexKey.trim()
+            prefs[DISABLED_DICTIONARIES] = settings.disabled.joinToString("\n")
+            prefs[DICTIONARY_ORDER] = settings.order.joinToString("\n")
         }
     }
 
@@ -115,6 +117,8 @@ class SettingsRepository(context: Context) {
                 ?.mapNotNullTo(HashSet()) { name -> OnlineDictionary.entries.find { it.name == name } }
                 ?: defaults.online,
             yandexKey = this[YANDEX_KEY] ?: defaults.yandexKey,
+            disabled = this[DISABLED_DICTIONARIES]?.split('\n')?.filterTo(HashSet()) { it.isNotEmpty() } ?: defaults.disabled,
+            order = this[DICTIONARY_ORDER]?.split('\n')?.filter { it.isNotEmpty() } ?: defaults.order,
         )
     }
 
@@ -168,5 +172,9 @@ class SettingsRepository(context: Context) {
         val MACHINE_TRANSLATION = stringPreferencesKey("machine_translation")
         val ONLINE_DICTIONARIES = stringPreferencesKey("online_dictionaries")
         val YANDEX_KEY = stringPreferencesKey("yandex_dictionary_key")
+        val DISABLED_DICTIONARIES = stringPreferencesKey("disabled_dictionaries")
+
+        // A string rather than a string set: the order is the user's.
+        val DICTIONARY_ORDER = stringPreferencesKey("dictionary_order")
     }
 }

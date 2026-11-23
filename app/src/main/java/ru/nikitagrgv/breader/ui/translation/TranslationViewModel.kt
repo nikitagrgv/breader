@@ -23,7 +23,8 @@ import ru.nikitagrgv.breader.BreaderApplication
 import ru.nikitagrgv.breader.data.TranslationSettings
 import ru.nikitagrgv.breader.dictionary.Dictionaries
 import ru.nikitagrgv.breader.dictionary.DictionaryResult
-import ru.nikitagrgv.breader.dictionary.meaningsLine
+import ru.nikitagrgv.breader.dictionary.BriefEntry
+import ru.nikitagrgv.breader.dictionary.brief
 import ru.nikitagrgv.breader.translation.Excerpt
 import ru.nikitagrgv.breader.translation.OpenRouter
 import ru.nikitagrgv.breader.translation.OpenRouterException
@@ -61,9 +62,9 @@ data class TranslationState(
     val pending: List<String>
         get() = models.filter { it !in results }
 
-    /** All the meanings from the dictionaries in one line; null if they have nothing. */
-    val dictionaryLine: String?
-        get() = dictionary.meaningsLine()
+    /** The meanings from the dictionaries by part of speech; empty if they have nothing. */
+    val dictionaryBrief: List<BriefEntry>
+        get() = dictionary.brief()
 }
 
 /**
