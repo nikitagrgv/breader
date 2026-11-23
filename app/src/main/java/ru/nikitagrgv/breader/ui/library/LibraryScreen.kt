@@ -4,13 +4,16 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
@@ -18,6 +21,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,6 +34,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -38,6 +44,10 @@ import ru.nikitagrgv.breader.data.Book
 import ru.nikitagrgv.breader.data.Library
 import ru.nikitagrgv.breader.format.BookParser
 import ru.nikitagrgv.breader.ui.DotSeparatedText
+import ru.nikitagrgv.breader.ui.KeepListPlace
+import ru.nikitagrgv.breader.ui.ReorderableItem
+import ru.nikitagrgv.breader.ui.rememberReorderState
+import ru.nikitagrgv.breader.ui.reorderableItem
 import ru.nikitagrgv.breader.ui.reader.formatCount
 import ru.nikitagrgv.breader.ui.reader.formatReadingTime
 import ru.nikitagrgv.breader.ui.reader.wordsProgress
@@ -54,6 +64,11 @@ fun AddBooksButton(onAddBooks: (List<Uri>) -> Unit) {
     }
 }
 
+/**
+ * The books, the favorite ones first, under a heading of their own. Each group is in the user's order, which is
+ * changed by dragging the books.
+ * @param onReorder gets the IDs of a group of books in their new order.
+ */
 @Composable
 fun LibraryScreen(
     library: Library?,
@@ -61,8 +76,21 @@ fun LibraryScreen(
     onOpenBook: (Book) -> Unit,
     onRemoveBook: (Book) -> Unit,
     onShowStats: (Book) -> Unit,
+    onFavoriteChange: (Book, Boolean) -> Unit,
+    onReorder: (List<String>) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val books = library?.books.orEmpty()
+    val byId = remember(books) { books.associateBy { it.id } }
+    val favoriteIds = remember(books) { books.filter { it.favorite }.map { it.id } }
+    val otherIds = remember(books) { books.filterNot { it.favorite }.map { it.id } }
+    // Each group is dragged within itself.
+    val favoritesOrder = rememberReorderState(favoriteIds, onReorder)
+    val othersOrder = rememberReorderState(otherIds, onReorder)
+    val listState = rememberLazyListState()
+    // So that a starred book doesn't take the list along to the favorites, nor a dragged one.
+    KeepListPlace(listState, favoritesOrder.order + othersOrder.order)
+
     Box(
         modifier
             .fillMaxSize()
@@ -88,21 +116,43 @@ fun LibraryScreen(
                 }
             } else {
                 // Bottom padding keeps the last item clear of the FAB.
-                LazyColumn(contentPadding = PaddingValues(bottom = 88.dp)) {
-                    items(library.books, key = { it.id }) { book ->
-                        BookItem(
-                            book = book,
-                            isOpen = book.id == library.currentBookId,
-                            onOpen = { onOpenBook(book) },
-                            onRemove = { onRemoveBook(book) },
-                            onShowStats = { onShowStats(book) },
-                            modifier = Modifier.animateItem(),
-                        )
+                LazyColumn(state = listState, contentPadding = PaddingValues(bottom = 88.dp)) {
+                    // The headings are only needed to tell the groups apart.
+                    val grouped = favoriteIds.isNotEmpty() && otherIds.isNotEmpty()
+                    if (grouped) item(key = FAVORITES_HEADING) { SectionHeader(R.string.library_favorites, Modifier.animateItem()) }
+                    for ((reorder, heading) in listOf(favoritesOrder to null, othersOrder to OTHERS_HEADING)) {
+                        if (grouped && heading != null) item(key = heading) { SectionHeader(R.string.library_others, Modifier.animateItem()) }
+                        items(reorder.order, key = { it }) { id ->
+                            val book = byId[id] ?: return@items
+                            BookItem(
+                                book = book,
+                                isOpen = book.id == library.currentBookId,
+                                onOpen = { onOpenBook(book) },
+                                onRemove = { onRemoveBook(book) },
+                                onShowStats = { onShowStats(book) },
+                                onFavoriteChange = { onFavoriteChange(book, it) },
+                                item = reorderableItem(reorder, id),
+                            )
+                        }
                     }
                 }
             }
         }
     }
+}
+
+// Unlike the book IDs, which are UUIDs.
+private const val FAVORITES_HEADING = "heading:favorites"
+private const val OTHERS_HEADING = "heading:others"
+
+@Composable
+private fun SectionHeader(@StringRes text: Int, modifier: Modifier = Modifier) {
+    Text(
+        text = stringResource(text),
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
+    )
 }
 
 @Composable
@@ -112,7 +162,8 @@ private fun BookItem(
     onOpen: () -> Unit,
     onRemove: () -> Unit,
     onShowStats: () -> Unit,
-    modifier: Modifier = Modifier,
+    onFavoriteChange: (Boolean) -> Unit,
+    item: ReorderableItem,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     val started = book.progress > 0f
@@ -137,35 +188,49 @@ private fun BookItem(
                 DotSeparatedText(listOfNotNull(progress, words, formatReadingTime(book.readingTimeMs)))
             }
         },
-        leadingContent = { Icon(painterResource(R.drawable.ic_book), contentDescription = null) },
+        leadingContent = item.handle,
         trailingContent = {
-            Box {
-                IconButton(onClick = { menuExpanded = true }) {
-                    Icon(painterResource(R.drawable.ic_more_vert), contentDescription = stringResource(R.string.book_options))
+            Row {
+                IconButton(onClick = { onFavoriteChange(!book.favorite) }) {
+                    Icon(
+                        painterResource(if (book.favorite) R.drawable.ic_star else R.drawable.ic_star_outline),
+                        contentDescription = stringResource(if (book.favorite) R.string.remove_from_favorites else R.string.add_to_favorites),
+                        tint = if (book.favorite) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                    )
                 }
-                DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.reading_stats)) },
-                        onClick = {
-                            menuExpanded = false
-                            onShowStats()
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.remove_from_library)) },
-                        onClick = {
-                            menuExpanded = false
-                            onRemove()
-                        },
-                    )
+                Box {
+                    IconButton(onClick = { menuExpanded = true }) {
+                        Icon(painterResource(R.drawable.ic_more_vert), contentDescription = stringResource(R.string.book_options))
+                    }
+                    DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.reading_stats)) },
+                            onClick = {
+                                menuExpanded = false
+                                onShowStats()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.remove_from_library)) },
+                            onClick = {
+                                menuExpanded = false
+                                onRemove()
+                            },
+                        )
+                    }
                 }
             }
         },
-        colors = if (isOpen) {
-            ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
-        } else {
-            ListItemDefaults.colors()
-        },
-        modifier = modifier.clickable(onClick = onOpen),
+        colors = ListItemDefaults.colors(
+            containerColor = when {
+                // Lifted off the list.
+                item.dragged -> MaterialTheme.colorScheme.surfaceContainerHigh
+                isOpen -> MaterialTheme.colorScheme.secondaryContainer
+                else -> MaterialTheme.colorScheme.surface
+            },
+        ),
+        modifier = item.modifier
+            .clickable(onClick = onOpen)
+            .semantics { customActions = item.actions },
     )
 }

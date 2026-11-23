@@ -82,6 +82,13 @@ class LibraryRepository(context: Context) {
 
     fun setCurrentBook(id: String?) = mutate { it.copy(currentBookId = id) }
 
+    fun setFavorite(id: String, favorite: Boolean) = mutate { library ->
+        library.copy(books = library.books.map { if (it.id == id) it.copy(favorite = favorite) else it })
+    }
+
+    /** Puts the books with the [ids] in this order into the places that they take in the library; the rest stay where they are. */
+    fun reorderBooks(ids: List<String>) = mutate { library -> library.copy(books = library.books.reordered(ids) { it.id }) }
+
     fun updatePosition(id: String, position: ReadingPosition, progress: Float) =
         mutate(saveDelayMs = 1_000) { library ->
             library.copy(books = library.books.map {
@@ -192,6 +199,7 @@ class LibraryRepository(context: Context) {
         .apply { if (timeByPercent.isNotEmpty()) put("timeByPercent", JSONArray(timeByPercent)) }
         .apply { if (wordCount != null) put("words", wordCount) }
         .put("selectionHistory", JSONArray(selectionHistory.toInts()))
+        .apply { if (favorite) put("favorite", true) }
 
     private fun JSONObject.toBook() = Book(
         id = getString("id"),
@@ -211,6 +219,7 @@ class LibraryRepository(context: Context) {
         selectionHistory = optJSONArray("selectionHistory")
             ?.let { array -> rangesFromInts((0 until array.length()).map { array.optInt(it, -1) }) }
             .orEmpty(),
+        favorite = optBoolean("favorite"),
     )
 
     private companion object {

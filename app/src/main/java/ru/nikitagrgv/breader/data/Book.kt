@@ -41,6 +41,8 @@ data class Book(
     val wordCount: Int? = null,
     /** What was selected in the book, the oldest first. */
     val selectionHistory: List<BookRange> = emptyList(),
+    /** Starred by the user: such books are listed first in the library. */
+    val favorite: Boolean = false,
 )
 
 /** What [Book.timeByPercent] splits a book into. */
@@ -56,6 +58,18 @@ internal fun List<Long>.plusTime(percent: Int, ms: Long): List<Long> {
     return times
 }
 
+/**
+ * The items with the [keys] put in this order into the places that they take; the rest stay where they are, and the
+ * [keys] that no item has are ignored. So the favorite books can be reordered among themselves without moving the others.
+ */
+internal fun <T> List<T>.reordered(keys: List<String>, key: (T) -> String): List<T> {
+    val byKey = associateBy(key)
+    val moved = keys.distinct().mapNotNull { byKey[it] }
+    val movedKeys = moved.mapTo(HashSet(), key)
+    val queue = moved.iterator()
+    return map { if (key(it) in movedKeys) queue.next() else it }
+}
+
 /** Four numbers per range, as there may be a lot of them. */
 internal fun List<BookRange>.toInts(): List<Int> =
     flatMap { listOf(it.start.paragraph, it.start.offset, it.end.paragraph, it.end.offset) }
@@ -68,6 +82,7 @@ internal fun rangesFromInts(ints: List<Int>): List<BookRange> =
         .filter { it.start < it.end }
 
 data class Library(
+    /** In the user's order; new books come first. */
     val books: List<Book> = emptyList(),
     /** The book open in the reader; it's reopened on the next launch. */
     val currentBookId: String? = null,

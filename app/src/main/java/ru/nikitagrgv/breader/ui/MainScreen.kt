@@ -171,6 +171,8 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
                     },
                     onRemoveBook = viewModel::removeBook,
                     onShowStats = { statsBookId = it.id },
+                    onFavoriteChange = viewModel::setFavorite,
+                    onReorder = viewModel::reorderBooks,
                 )
                 // The book text ignores innerPadding: the bars are drawn over it, so showing them doesn't move the text.
                 MainTab.READER -> ReaderScreen(

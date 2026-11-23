@@ -127,6 +127,11 @@ class MainViewModel(
 
     fun undoRemove(event: LibraryEvent.BookRemoved) = repository.insertBook(event.book, event.index)
 
+    fun setFavorite(book: Book, favorite: Boolean) = repository.setFavorite(book.id, favorite)
+
+    /** See [LibraryRepository.reorderBooks]. */
+    fun reorderBooks(ids: List<String>) = repository.reorderBooks(ids)
+
     fun savePosition(bookId: String, position: ReadingPosition, progress: Float) =
         repository.updatePosition(bookId, position, progress)
 

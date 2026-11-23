@@ -8,6 +8,8 @@
 
     <string name="library_title">Library</string>
     <string name="library_empty">Your library is empty.\nAdd EPUB, FB2, PDF or TXT books with the + button.</string>
+    <string name="library_favorites">Favorite books</string>
+    <string name="library_others">Other books</string>
     <string name="add_books">Add books</string>
     <string name="book_options">More options</string>
     <string name="remove_from_library">Remove from library</string>

@@ -3,9 +3,6 @@ package ru.nikitagrgv.breader.ui.dictionary
 import android.text.format.Formatter
 import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +17,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
@@ -40,27 +38,18 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
@@ -68,7 +57,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ru.nikitagrgv.breader.R
 import ru.nikitagrgv.breader.data.DictionarySettings
@@ -83,9 +71,12 @@ import ru.nikitagrgv.breader.dictionary.Kaikki
 import ru.nikitagrgv.breader.dictionary.OnlineDictionary
 import ru.nikitagrgv.breader.dictionary.all
 import ru.nikitagrgv.breader.dictionary.dictionaryId
+import ru.nikitagrgv.breader.ui.KeepListPlace
+import ru.nikitagrgv.breader.ui.ReorderableItem
+import ru.nikitagrgv.breader.ui.reorderableItem
+import ru.nikitagrgv.breader.ui.rememberReorderState
 import ru.nikitagrgv.breader.ui.settings.htmlString
 import java.text.NumberFormat
-import java.util.Collections
 
 /**
  * A full-screen list of the dictionaries, the downloaded ones and the online ones, to turn them on and off and to set
@@ -116,15 +107,9 @@ fun DictionaryManagerDialog(
     val dictionaries = remember(installed, settings.order) { settings.all(installed) }
     val byKey = remember(dictionaries) { dictionaries.associateBy { it.orderKey } }
     val storedOrder = remember(dictionaries) { dictionaries.map { it.orderKey } }
-    val drag = remember { DictionaryDrag() }
-    // Once the settings have the order that's dragged, or anything else changes it.
-    LaunchedEffect(storedOrder) { drag.forgetOrder() }
-    val order = drag.shownOrder(storedOrder)
-    val moveUp = stringResource(R.string.move_up)
-    val moveDown = stringResource(R.string.move_down)
-    fun reorder(keys: List<String>) {
-        if (keys != storedOrder) onSettingsChange { it.copy(order = keys) }
-    }
+    val reorder = rememberReorderState(storedOrder) { keys -> onSettingsChange { it.copy(order = keys) } }
+    val listState = rememberLazyListState()
+    KeepListPlace(listState, reorder.order)
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxSize()) {
@@ -140,7 +125,7 @@ fun DictionaryManagerDialog(
                     )
                 }
 
-                LazyColumn(Modifier.fillMaxSize()) {
+                LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                     item { SectionHeader(R.string.dictionaries_yours) }
                     item {
                         Text(
@@ -150,34 +135,9 @@ fun DictionaryManagerDialog(
                             modifier = Modifier.padding(horizontal = 16.dp),
                         )
                     }
-                    items(order, key = { it }) { key ->
+                    items(reorder.order, key = { it }) { key ->
                         val source = byKey[key] ?: return@items
-                        val index = order.indexOf(key)
-                        val dragged = drag.key == key
-                        // Read in the layer, so that following the finger takes no recomposition.
-                        val placement = if (dragged) {
-                            Modifier
-                                .zIndex(1f)
-                                .graphicsLayer {
-                                    translationY = drag.offset
-                                    shadowElevation = DRAGGED_ELEVATION.toPx()
-                                }
-                        } else {
-                            Modifier.animateItem()
-                        }
-                        val handle: @Composable () -> Unit = {
-                            DragHandle(
-                                onStart = { y -> drag.start(key, y, order) },
-                                onDrag = drag::dragTo,
-                                onEnd = { drag.end()?.let(::reorder) },
-                            )
-                        }
-                        // For those who can't drag.
-                        val actions = listOfNotNull(
-                            order.getOrNull(index - 1)?.let { CustomAccessibilityAction(moveUp) { reorder(order.swap(index, index - 1)); true } },
-                            order.getOrNull(index + 1)?.let { CustomAccessibilityAction(moveDown) { reorder(order.swap(index, index + 1)); true } },
-                        )
-                        val modifier = placement.onSizeChanged { drag.heights[key] = it.height }
+                        val item = reorderableItem(reorder, key)
                         when (source) {
                             is DictionarySource.Downloaded -> DownloadedItem(
                                 dictionary = source.info,
@@ -192,10 +152,7 @@ fun DictionaryManagerDialog(
                                     onSettingsChange { it.forget(source.info.id) }
                                 },
                                 onCancel = { viewModel.cancel(source.info.id) },
-                                handle = handle,
-                                actions = actions,
-                                dragged = dragged,
-                                modifier = modifier,
+                                item = item,
                             )
                             is DictionarySource.Online -> OnlineItem(
                                 dictionary = source.dictionary,
@@ -209,10 +166,7 @@ fun DictionaryManagerDialog(
                                     yandexKey = value
                                     onSettingsChange { it.copy(yandexKey = value) }
                                 },
-                                handle = handle,
-                                actions = actions,
-                                dragged = dragged,
-                                modifier = modifier,
+                                item = item,
                             )
                         }
                     }
@@ -277,126 +231,6 @@ fun DictionaryManagerDialog(
     }
 }
 
-/**
- * The dragging of a dictionary to another place in the list. The order shown follows it, ahead of the settings,
- * which only store the new one once the finger is lifted.
- */
-@Stable
-private class DictionaryDrag {
-    /** The order being dragged, or dragged and not yet stored; null to show the stored one. */
-    private var order by mutableStateOf<List<String>?>(null)
-
-    /** The order key of the dictionary being dragged. */
-    var key by mutableStateOf<String?>(null)
-        private set
-
-    /** How far it's moved from its place in the order, in px. */
-    var offset by mutableFloatStateOf(0f)
-        private set
-
-    /** Where the finger would be if it had stayed at the place of the dictionary in the order, in root px. */
-    private var originY = 0f
-
-    /** The heights of the dictionaries by order key, in px: one is dragged past another by half of its height. */
-    val heights = HashMap<String, Int>()
-
-    /** [stored], unless another order is being dragged; dictionaries added or removed meanwhile are added or removed. */
-    fun shownOrder(stored: List<String>): List<String> {
-        val dragged = order ?: return stored
-        return dragged.filter { it in stored } + stored.filter { it !in dragged }
-    }
-
-    /** @param y where the finger is, in root px. */
-    fun start(key: String, y: Float, order: List<String>) {
-        this.order = order
-        this.key = key
-        originY = y
-        offset = 0f
-    }
-
-    fun dragTo(y: Float) {
-        val key = key ?: return
-        val order = order?.toMutableList() ?: return
-        var index = order.indexOf(key)
-        if (index < 0) return
-        offset = y - originY
-        // A fast drag can go past several.
-        while (true) {
-            val next = order.getOrNull(index + 1)?.let { it to (heights[it] ?: 0) }
-            val previous = order.getOrNull(index - 1)?.let { it to (heights[it] ?: 0) }
-            if (next != null && offset > next.second / 2f) {
-                Collections.swap(order, index, index + 1)
-                index++
-                // Its place in the order is lower by the height of the one it's gone past.
-                originY += next.second
-                offset -= next.second
-            } else if (previous != null && offset < -previous.second / 2f) {
-                Collections.swap(order, index, index - 1)
-                index--
-                originY -= previous.second
-                offset += previous.second
-            } else {
-                break
-            }
-        }
-        this.order = order
-    }
-
-    /** Returns the new order, which is still shown until the settings have it. */
-    fun end(): List<String>? {
-        key = null
-        offset = 0f
-        return order
-    }
-
-    /** Shows the stored order, unless one is being dragged. */
-    fun forgetOrder() {
-        if (key == null) order = null
-    }
-}
-
-private fun List<String>.swap(from: Int, to: Int): List<String> = toMutableList().also { Collections.swap(it, from, to) }
-
-private val DRAGGED_ELEVATION = 8.dp
-
-/**
- * Drags at once, unlike a long press: it's there only for dragging. The positions are in root coordinates, as the
- * handle moves along with the finger.
- */
-@Composable
-private fun DragHandle(onStart: (y: Float) -> Unit, onDrag: (y: Float) -> Unit, onEnd: () -> Unit) {
-    val currentOnStart by rememberUpdatedState(onStart)
-    val currentOnDrag by rememberUpdatedState(onDrag)
-    val currentOnEnd by rememberUpdatedState(onEnd)
-    val coordinates = remember { arrayOfNulls<LayoutCoordinates>(1) }
-    Icon(
-        painterResource(R.drawable.ic_drag_indicator),
-        // The item has actions for moving it instead.
-        contentDescription = null,
-        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier
-            .onGloballyPositioned { coordinates[0] = it }
-            .pointerInput(Unit) {
-                awaitEachGesture {
-                    val down = awaitFirstDown(requireUnconsumed = false)
-                    // Not a tap of the item, which would turn it on or off.
-                    down.consume()
-                    val layout = coordinates[0]?.takeIf { it.isAttached } ?: return@awaitEachGesture
-                    currentOnStart(layout.localToRoot(down.position).y)
-                    try {
-                        drag(down.id) { change ->
-                            change.consume()
-                            if (layout.isAttached) currentOnDrag(layout.localToRoot(change.position).y)
-                        }
-                    } finally {
-                        currentOnEnd()
-                    }
-                }
-            }
-            .padding(12.dp),
-    )
-}
-
 @Composable
 private fun OnlineItem(
     dictionary: OnlineDictionary,
@@ -404,23 +238,20 @@ private fun OnlineItem(
     onEnabledChange: (Boolean) -> Unit,
     yandexKey: String,
     onYandexKeyChange: (String) -> Unit,
-    handle: @Composable () -> Unit,
-    actions: List<CustomAccessibilityAction>,
-    dragged: Boolean,
-    modifier: Modifier = Modifier,
+    item: ReorderableItem,
 ) {
-    Surface(color = itemColor(dragged), modifier = modifier) {
+    Surface(color = itemColor(item.dragged), modifier = item.modifier) {
         Column {
             ListItem(
                 headlineContent = { Text(stringResource(dictionary.title)) },
                 overlineContent = { Text(stringResource(R.string.dictionaries_online)) },
                 supportingContent = { Text(stringResource(dictionary.summary)) },
-                leadingContent = handle,
+                leadingContent = item.handle,
                 trailingContent = { Switch(checked = enabled, onCheckedChange = null) },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                 modifier = Modifier
                     .toggleable(value = enabled, role = Role.Switch, onValueChange = onEnabledChange)
-                    .semantics { customActions = actions },
+                    .semantics { customActions = item.actions },
             )
             if (dictionary == OnlineDictionary.YANDEX && enabled) {
                 OutlinedTextField(
@@ -510,13 +341,10 @@ private fun DownloadedItem(
     download: Download?,
     onRemove: () -> Unit,
     onCancel: () -> Unit,
-    handle: @Composable () -> Unit,
-    actions: List<CustomAccessibilityAction>,
-    dragged: Boolean,
-    modifier: Modifier = Modifier,
+    item: ReorderableItem,
 ) {
     val context = LocalContext.current
-    Surface(color = itemColor(dragged), modifier = modifier) {
+    Surface(color = itemColor(item.dragged), modifier = item.modifier) {
         ListItem(
             headlineContent = { Text(dictionary.name) },
             overlineContent = { Text(stringResource(R.string.dictionaries_downloaded)) },
@@ -534,7 +362,7 @@ private fun DownloadedItem(
                     )
                 }
             },
-            leadingContent = handle,
+            leadingContent = item.handle,
             trailingContent = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (download != null) {
@@ -550,7 +378,7 @@ private fun DownloadedItem(
             colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             modifier = Modifier
                 .toggleable(value = enabled, role = Role.Switch, onValueChange = onEnabledChange)
-                .semantics { customActions = actions },
+                .semantics { customActions = item.actions },
         )
     }
 }
