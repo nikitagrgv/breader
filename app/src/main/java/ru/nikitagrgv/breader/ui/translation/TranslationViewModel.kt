@@ -28,6 +28,7 @@ import ru.nikitagrgv.breader.dictionary.brief
 import ru.nikitagrgv.breader.translation.Excerpt
 import ru.nikitagrgv.breader.translation.OpenRouter
 import ru.nikitagrgv.breader.translation.OpenRouterException
+import ru.nikitagrgv.breader.translation.RequestKind
 import ru.nikitagrgv.breader.translation.Translation
 import ru.nikitagrgv.breader.translation.TranslationCache
 import ru.nikitagrgv.breader.translation.TranslationKey
@@ -228,6 +229,8 @@ class TranslationViewModel(
                     model = model,
                     system = TranslationPrompt.system(language),
                     user = TranslationPrompt.user(excerpt, settings.sourceLanguage, language),
+                    kind = RequestKind.TRANSLATION,
+                    fragment = excerpt.fragment,
                 )
                 TranslationPrompt.parse(reply)?.let { ModelResult.Done(it) }
                     ?: ModelResult.Failed(TranslationError(TranslationError.Kind.BAD_REPLY)).also {

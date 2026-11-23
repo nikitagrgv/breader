@@ -21,6 +21,7 @@ import ru.nikitagrgv.breader.translation.Excerpt
 import ru.nikitagrgv.breader.translation.GrammarExplanation
 import ru.nikitagrgv.breader.translation.GrammarPrompt
 import ru.nikitagrgv.breader.translation.OpenRouter
+import ru.nikitagrgv.breader.translation.RequestKind
 
 sealed interface GrammarResult {
     data class Done(val explanation: GrammarExplanation) : GrammarResult
@@ -81,6 +82,8 @@ class GrammarViewModel(private val openRouter: OpenRouter) : ViewModel() {
                     model = model,
                     system = GrammarPrompt.system(language),
                     user = GrammarPrompt.user(excerpt, settings.sourceLanguage, language),
+                    kind = RequestKind.GRAMMAR,
+                    fragment = excerpt.fragment,
                 )
                 GrammarPrompt.parse(reply)?.let { GrammarResult.Done(it) }
                     ?: GrammarResult.Failed(TranslationError(TranslationError.Kind.BAD_REPLY))

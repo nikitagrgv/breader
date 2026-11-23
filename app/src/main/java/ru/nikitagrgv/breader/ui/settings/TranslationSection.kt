@@ -66,6 +66,7 @@ fun TranslationSection(
     var contextWords by remember(settings.contextWords) { mutableFloatStateOf(settings.contextWords.toFloat()) }
     var cacheSize by remember(settings.cacheSize) { mutableFloatStateOf(settings.cacheSize.toFloat()) }
     var pickingModels by rememberSaveable { mutableStateOf(false) }
+    var viewingUsage by rememberSaveable { mutableStateOf(false) }
 
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -142,6 +143,15 @@ fun TranslationSection(
         },
         modifier = Modifier.clickable { pickingModels = true },
     )
+
+    // Without a key, OpenRouter isn't used, and there's nothing to show.
+    if (settings.apiKey.isNotBlank()) {
+        ListItem(
+            headlineContent = { Text(stringResource(R.string.usage_title)) },
+            supportingContent = { Text(stringResource(R.string.usage_summary)) },
+            modifier = Modifier.clickable { viewingUsage = true },
+        )
+    }
 
     ListItem(
         headlineContent = { Text(stringResource(R.string.auto_translate)) },
@@ -239,6 +249,9 @@ fun TranslationSection(
             },
             onDismiss = { pickingModels = false },
         )
+    }
+    if (viewingUsage && settings.apiKey.isNotBlank()) {
+        UsageDialog(apiKey = settings.apiKey, onDismiss = { viewingUsage = false })
     }
 }
 

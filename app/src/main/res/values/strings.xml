@@ -159,6 +159,8 @@
         <item quantity="other">%1$d fragments saved</item>
     </plurals>
     <string name="clear_cache">Clear cache</string>
+    <string name="usage_title">Usage and balance</string>
+    <string name="usage_summary">How much is left on the OpenRouter key, and what each request cost</string>
 
     <string name="settings_machine_translation">Machine translation</string>
     <string name="machine_translation_summary">A free service for the globe button in the reader. It translates the selected text by itself, without the text around it, so it may miss the meaning the models would pick. It uses the languages set above. Google Translate isn\'t an official API and may stop working; MyMemory has a daily limit.</string>
@@ -188,6 +190,45 @@
     <string name="models_failed">Couldn\'t load the models. Check the connection.</string>
     <string name="models_empty">No models match.</string>
     <string name="retry">Retry</string>
+
+    <string name="usage_dialog_title">OpenRouter usage</string>
+    <string name="refresh">Refresh</string>
+    <string name="usage_balance_failed">Couldn\'t get the balance: %1$s</string>
+    <string name="usage_left">Left to spend</string>
+    <string name="usage_left_hint">The key limit or the account credits, whichever leaves less.</string>
+    <string name="usage_no_limit">No limit</string>
+    <string name="usage_key_limit">Key limit</string>
+    <string name="usage_key_limit_none">None</string>
+    <string name="usage_amount_left">%1$s of %2$s left</string>
+    <string name="usage_limit_reset">Limit resets</string>
+    <string name="usage_reset_daily">Daily</string>
+    <string name="usage_reset_weekly">Weekly</string>
+    <string name="usage_reset_monthly">Monthly</string>
+    <string name="usage_credits">Account credits</string>
+    <string name="usage_free_requests">Free models today</string>
+    <string name="usage_free_requests_value">%1$s of %2$s requests</string>
+    <string name="usage_expires">Key expires</string>
+    <string name="usage_spent">Spent with this key</string>
+    <string name="usage_today">Today</string>
+    <string name="usage_week">This week</string>
+    <string name="usage_month">This month</string>
+    <string name="usage_all_time">In all</string>
+    <string name="usage_utc_hint">Days, weeks and months start at midnight UTC. Includes the requests made with this key elsewhere.</string>
+    <string name="usage_requests">Requests</string>
+    <plurals name="usage_requests_total">
+        <item quantity="one">%1$d request, %2$s</item>
+        <item quantity="other">%1$d requests, %2$s in all</item>
+    </plurals>
+    <string name="usage_requests_hint">The requests made in this app on this device, the latest first, with what OpenRouter charged for each. Only the last %1$s are kept.</string>
+    <string name="usage_requests_empty">No requests yet.</string>
+    <string name="usage_clear">Clear</string>
+    <string name="usage_clear_title">Clear the request list?</string>
+    <string name="usage_clear_text">Only the list on this device is cleared; the balance and the spending above stay as they are.</string>
+    <string name="usage_kind_translation">Translation</string>
+    <string name="usage_kind_grammar">Grammar</string>
+    <string name="usage_request_title">%1$s · %2$s</string>
+    <string name="usage_request_details">%1$s · %2$s tokens in, %3$s out</string>
+    <string name="usage_cost_unknown">—</string>
 
     <string name="translation_setup_needed">To translate, add an OpenRouter API key and pick models in the settings.</string>
     <string name="open_settings">Open settings</string>
