@@ -1,5 +1,6 @@
 package ru.nikitagrgv.breader.ui.translation
 
+import android.content.res.Resources
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -22,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -116,8 +118,9 @@ private fun Results(state: TranslationState, onRetry: (model: String) -> Unit) {
     }
 }
 
+/** The variants with the models that gave them, the alternatives and the notes. */
 @Composable
-private fun Translations(combined: CombinedTranslation) {
+internal fun Translations(combined: CombinedTranslation) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             combined.variants.forEachIndexed { index, variant ->
@@ -172,14 +175,17 @@ private fun Section(@StringRes title: Int, content: @Composable () -> Unit) {
 }
 
 @Composable
-internal fun errorText(error: TranslationError): String = when (error.kind) {
-    TranslationError.Kind.INVALID_KEY -> stringResource(R.string.error_invalid_key)
-    TranslationError.Kind.NO_CREDITS -> stringResource(R.string.error_no_credits)
-    TranslationError.Kind.RATE_LIMITED -> stringResource(R.string.error_rate_limited)
-    TranslationError.Kind.TIMEOUT -> stringResource(R.string.error_timeout)
-    TranslationError.Kind.NETWORK -> stringResource(R.string.error_network)
-    TranslationError.Kind.BAD_REPLY -> stringResource(R.string.error_bad_reply)
-    TranslationError.Kind.OTHER -> error.details ?: stringResource(R.string.error_unknown)
+internal fun errorText(error: TranslationError): String = error.describe(LocalResources.current)
+
+/** What went wrong, for the user. */
+fun TranslationError.describe(resources: Resources): String = when (kind) {
+    TranslationError.Kind.INVALID_KEY -> resources.getString(R.string.error_invalid_key)
+    TranslationError.Kind.NO_CREDITS -> resources.getString(R.string.error_no_credits)
+    TranslationError.Kind.RATE_LIMITED -> resources.getString(R.string.error_rate_limited)
+    TranslationError.Kind.TIMEOUT -> resources.getString(R.string.error_timeout)
+    TranslationError.Kind.NETWORK -> resources.getString(R.string.error_network)
+    TranslationError.Kind.BAD_REPLY -> resources.getString(R.string.error_bad_reply)
+    TranslationError.Kind.OTHER -> details ?: resources.getString(R.string.error_unknown)
 }
 
 /** "google/gemma-4-31b-it:free" → "gemma-4-31b-it": the vendor and the free tier only take room. */

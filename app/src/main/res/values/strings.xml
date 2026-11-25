@@ -78,6 +78,32 @@
     <string name="stats_speed_summary">Words per hour at each percent. Percents you went through faster than anyone reads, and the one you\'re at, are left out. The line across is the average.</string>
     <string name="stats_tracked_since">The time is kept by percent since an app update: %1$s of it so far.</string>
 
+    <string name="word_stats">Word frequency</string>
+    <string name="word_stats_counting">Counting the words…</string>
+    <string name="word_stats_failed">Couldn\'t read the book. The file may have been moved or deleted.</string>
+    <string name="word_stats_pdf_not_open">The words of a PDF are counted while it\'s open in the reader.</string>
+    <string name="word_stats_open_book">Open the book</string>
+    <string name="word_stats_empty">There are no words to count. The book may be a scan.</string>
+    <plurals name="word_stats_different">
+        <item quantity="one">%1$s different</item>
+        <item quantity="other">%1$s different</item>
+    </plurals>
+    <string name="word_stats_hide_common">Hide common words</string>
+    <string name="word_stats_hide_common_summary">%1$s… They make up %2$s of the text.</string>
+    <string name="word_stats_explanation">The words of the book, the most frequent first, with how many times each one is there and its share of the text. On the right is the share of the word together with all the words above it: knowing them, you know that much of the text. Tap a word to look it up.</string>
+    <string name="word_stats_explanation_hidden">The hidden common words count as known there.</string>
+    <string name="word_stats_no_dictionaries">Download a dictionary to see the meanings of the words here.</string>
+    <string name="word_stats_rank">#%1$d</string>
+    <plurals name="word_stats_times">
+        <item quantity="one">%1$s time</item>
+        <item quantity="other">%1$s times</item>
+    </plurals>
+    <string name="word_stats_milestone">%1$s of the text covered</string>
+    <string name="word_stats_page">Page %1$d of %2$d</string>
+    <string name="word_stats_page_coverage">%1$s–%2$s</string>
+    <string name="previous_page">Previous page</string>
+    <string name="next_page">Next page</string>
+
     <string name="settings_title">Settings</string>
     <string name="settings_theme">Theme</string>
     <string name="theme_dark">Dark</string>
@@ -310,9 +336,23 @@
     <string name="dictionary_needs_source_language">set the book language in “Translate from” in the settings</string>
 
     <string name="favorites_title">Favorites</string>
-    <string name="favorites_empty">No favorites yet.\nSelect a word in a book, or look one up with the search button above, and tap the star to keep it here.</string>
-    <string name="favorite_not_found">The dictionaries have nothing for it, so it can\'t be kept.</string>
-    <string name="favorites_need_dictionary">Favorites are words from the dictionaries. Download one, or turn on the ones you have, in the settings first.</string>
+    <string name="favorites_empty">No favorites yet.\nSelect a word or a phrase in a book, or look one up with the search button above, and tap the star to keep it here. Hold the star to pick what to keep it with: the dictionary meanings, an AI translation or a machine one.</string>
+    <string name="favorite_not_found">The dictionaries have nothing for it. Keep it with a translation instead.</string>
+    <string name="favorites_need_dictionary">There are no dictionaries to look it up in. Download one, or turn on the ones you have, in the settings.</string>
+    <string name="favorite_keep_as">Keep in favorites with</string>
+    <string name="favorite_kind_dictionary">Dictionary meanings</string>
+    <string name="favorite_kind_ai">AI translation</string>
+    <string name="favorite_kind_machine">Machine translation</string>
+    <string name="favorite_no_translation">No translation</string>
+    <string name="favorite_open_dictionary">Open in the dictionaries</string>
+    <string name="favorite_plain_summary">Nothing could translate it when it was kept.</string>
+    <string name="favorite_in_the_book">In the book</string>
+    <string name="favorite_go_to_place">Go to the place in the book</string>
+    <string name="favorite_book_missing">“%1$s” isn\'t in the library. Add it again to go there.</string>
+    <string name="favorite_saved_machine">The models couldn\'t translate it, so it\'s kept with a machine translation.</string>
+    <string name="favorite_saved_plain">Nothing could translate it, so it\'s kept without a translation.</string>
+    <string name="favorite_translation_failed">Couldn\'t translate it: %1$s</string>
+    <string name="favorite_remove_kind_title">Remove the %2$s from “%1$s”?</string>
     <string name="look_up_word">Look up a word</string>
     <string name="favorite_remove_title">Remove “%1$s” from the favorites?</string>
     <plurals name="favorites_remove_title">

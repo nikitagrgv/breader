@@ -25,6 +25,7 @@ import ru.nikitagrgv.breader.dictionary.Edition
 import ru.nikitagrgv.breader.dictionary.Kaikki
 import ru.nikitagrgv.breader.dictionary.LookupFailure
 import ru.nikitagrgv.breader.dictionary.OnlineDictionary
+import ru.nikitagrgv.breader.ui.favorites.FavoriteOrigin
 
 sealed interface LanguageList {
     data object Loading : LanguageList
@@ -37,12 +38,14 @@ sealed interface LanguageList {
  * @param results null until the downloaded dictionaries are looked in, which is a moment.
  * @param pending the online dictionaries that are still being asked.
  * @param failed the online dictionaries that couldn't be asked.
+ * @param origin where the text comes from, for keeping it in the favorites; null if it's typed.
  */
 data class DictionaryLookup(
     val text: String,
     val results: List<DictionaryResult>?,
     val pending: List<OnlineDictionary> = emptyList(),
     val failed: Map<OnlineDictionary, LookupFailure> = emptyMap(),
+    val origin: FavoriteOrigin? = null,
 )
 
 /** The dictionary manager and the detailed lookup of the selected text, or of a word the user types. */
@@ -91,14 +94,17 @@ class DictionaryViewModel(private val repository: DictionaryRepository, private 
 
     fun remove(id: String) = repository.remove(id)
 
-    /** Shows what the dictionaries have for [text]; a blank one opens the lookup for the user to type a word. */
-    fun lookUp(text: String) {
+    /**
+     * Shows what the dictionaries have for [text]; a blank one opens the lookup for the user to type a word.
+     * @param origin see [DictionaryLookup.origin].
+     */
+    fun lookUp(text: String, origin: FavoriteOrigin? = null) {
         lookupJob?.cancel()
         if (text.isBlank()) {
             _lookup.value = DictionaryLookup("", results = emptyList())
             return
         }
-        _lookup.value = DictionaryLookup(text, results = null)
+        _lookup.value = DictionaryLookup(text, results = null, origin = origin)
         lookupJob = viewModelScope.launch {
             dictionaries.lookup(text).collect { progress ->
                 _lookup.update { it?.copy(results = progress.results, pending = progress.pending, failed = progress.failed) }

@@ -43,6 +43,7 @@ class SettingsRepository(context: Context) {
                 moreSelectionActions = prefs[MORE_SELECTION_ACTIONS] ?: defaults.moreSelectionActions,
                 selectionFadeMs = prefs[SELECTION_FADE_MS] ?: defaults.selectionFadeMs,
                 selectionHistorySize = prefs[SELECTION_HISTORY_SIZE] ?: defaults.selectionHistorySize,
+                hideCommonWords = prefs[HIDE_COMMON_WORDS] ?: defaults.hideCommonWords,
                 translation = prefs.translationSettings(),
                 dictionaries = prefs.dictionarySettings(),
             )
@@ -92,6 +93,10 @@ class SettingsRepository(context: Context) {
 
     suspend fun setSeekBarPosition(position: SeekBarPosition) {
         dataStore.edit { it[SEEK_BAR_POSITION] = position.name }
+    }
+
+    suspend fun setHideCommonWords(hide: Boolean) {
+        dataStore.edit { it[HIDE_COMMON_WORDS] = hide }
     }
 
     /** [transform] gets the stored settings, so quick successive changes don't overwrite each other. */
@@ -162,6 +167,7 @@ class SettingsRepository(context: Context) {
         val MORE_SELECTION_ACTIONS = booleanPreferencesKey("more_selection_actions")
         val SELECTION_FADE_MS = intPreferencesKey("selection_fade_ms")
         val SELECTION_HISTORY_SIZE = intPreferencesKey("selection_history_size")
+        val HIDE_COMMON_WORDS = booleanPreferencesKey("hide_common_words")
         val OPENROUTER_KEY = stringPreferencesKey("openrouter_key")
         val TRANSLATION_MODELS = stringPreferencesKey("translation_models")
         val SOURCE_LANGUAGE = stringPreferencesKey("source_language")

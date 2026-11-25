@@ -38,6 +38,7 @@ import ru.nikitagrgv.breader.format.BookFormat
 import ru.nikitagrgv.breader.format.BookWords
 import ru.nikitagrgv.breader.format.PdfBook
 import ru.nikitagrgv.breader.format.countWords
+import ru.nikitagrgv.breader.translation.BookRange
 import ru.nikitagrgv.breader.ui.reader.ReaderState
 import ru.nikitagrgv.breader.ui.reader.SelectionHistoryState
 import ru.nikitagrgv.breader.ui.reader.bookId
@@ -47,6 +48,9 @@ sealed interface LibraryEvent {
     data class ImportFinished(val failed: List<String>, val duplicates: List<String>) : LibraryEvent
     data class BookRemoved(val book: Book, val index: Int) : LibraryEvent
 }
+
+/** A place in a book to show once the book is open in the reader, see [MainViewModel.jumpTo]. */
+data class ReaderJump(val bookId: String, val range: BookRange)
 
 class MainViewModel(
     private val repository: LibraryRepository,
@@ -66,6 +70,11 @@ class MainViewModel(
     private val _events = Channel<LibraryEvent>(Channel.BUFFERED)
     val events: Flow<LibraryEvent> = _events.receiveAsFlow()
 
+    private val _jump = MutableStateFlow<ReaderJump?>(null)
+
+    /** The place the reader is to show, once it has the book open; null when there's none. */
+    val jump: StateFlow<ReaderJump?> = _jump.asStateFlow()
+
     private var loadJob: Job? = null
 
     /** Counts the words of the open PDF, whose pages are read one by one. */
@@ -78,6 +87,7 @@ class MainViewModel(
             val book = library.books.find { it.id == library.currentBookId }
             if (book != null) load(book) else setReader(ReaderState.Empty)
             countMissingWords(library.books)
+            fingerprintMissing(library.books)
         }
     }
 
@@ -103,6 +113,7 @@ class MainViewModel(
             }
             repository.addBooks(added)
             countMissingWords(added)
+            fingerprintMissing(added)
             if (failed.isNotEmpty() || duplicates.isNotEmpty()) {
                 _events.send(LibraryEvent.ImportFinished(failed, duplicates))
             }
@@ -114,6 +125,16 @@ class MainViewModel(
         if (current.bookId == book.id && current !is ReaderState.Failed) return
         repository.setCurrentBook(book.id)
         load(book)
+    }
+
+    /** Opens [book] in the reader, unless it's open already, and shows the [range] of it there, selected. */
+    fun jumpTo(book: Book, range: BookRange) {
+        openBook(book)
+        _jump.value = ReaderJump(book.id, range)
+    }
+
+    fun onJumpDone() {
+        _jump.value = null
     }
 
     fun removeBook(book: Book) {
@@ -179,6 +200,10 @@ class MainViewModel(
 
     fun setSeekBarPosition(position: SeekBarPosition) {
         viewModelScope.launch { settingsRepository.setSeekBarPosition(position) }
+    }
+
+    fun setHideCommonWords(hide: Boolean) {
+        viewModelScope.launch { settingsRepository.setHideCommonWords(hide) }
     }
 
     fun updateTranslationSettings(transform: (TranslationSettings) -> TranslationSettings) {
@@ -265,6 +290,25 @@ class MainViewModel(
                 if (count != null && library.value?.books?.find { it.id == book.id }?.wordCount == null) {
                     repository.setWordCount(book.id, count)
                 }
+            }
+        }
+    }
+
+    /** Takes the fingerprints of the [books] that have none yet, one at a time in the background: see [Book.fingerprint]. */
+    private fun fingerprintMissing(books: List<Book>) {
+        val missing = books.filter { it.fingerprint == null }
+        if (missing.isEmpty()) return
+        viewModelScope.launch {
+            for (book in missing) {
+                val fingerprint = withContext(Dispatchers.IO) {
+                    try {
+                        files.fingerprint(book.uri)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to take the fingerprint of ${book.uri}", e)
+                        null
+                    }
+                }
+                if (fingerprint != null) repository.setFingerprint(book.id, fingerprint)
             }
         }
     }

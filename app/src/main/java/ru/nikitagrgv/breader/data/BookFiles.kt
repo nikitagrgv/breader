@@ -11,6 +11,7 @@ import ru.nikitagrgv.breader.format.BookSource
 import java.io.FileNotFoundException
 import java.io.IOException
 import java.io.InputStream
+import java.security.MessageDigest
 import java.util.UUID
 
 /** Access to book files picked by the user. All methods block, call them off the main thread. */
@@ -42,6 +43,23 @@ class BookFiles(context: Context) {
     /** A [java.io.Closeable] content is open until it's closed. */
     fun readContent(book: Book): BookContent = BookParser.parse(book.format, source(book.uri))
 
+    /**
+     * A hash of the file's bytes, which tells it apart whatever it's named and wherever it's picked from. Unlike one of
+     * its text, it doesn't change when the app reads the text another way, and a PDF needn't be opened for it.
+     */
+    fun fingerprint(uri: Uri): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        source(uri).openStream().use { input ->
+            val buffer = ByteArray(BUFFER_SIZE)
+            while (true) {
+                val read = input.read(buffer)
+                if (read < 0) break
+                digest.update(buffer, 0, read)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
     fun displayName(uri: Uri): String? = runCatching {
         resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
             if (cursor.moveToFirst()) cursor.getString(0) else null
@@ -54,5 +72,9 @@ class BookFiles(context: Context) {
 
         override fun openDescriptor(): ParcelFileDescriptor =
             resolver.openFileDescriptor(uri, "r") ?: throw FileNotFoundException("Can't open $uri")
+    }
+
+    private companion object {
+        const val BUFFER_SIZE = 1 shl 16
     }
 }

@@ -63,6 +63,8 @@ data class AppSettings(
     val selectionFadeMs: Int = DEFAULT_SELECTION_FADE_MS,
     /** How many selections each book's history keeps; 0 turns the history off, without losing what's in it. */
     val selectionHistorySize: Int = DEFAULT_SELECTION_HISTORY_SIZE,
+    /** Whether the word frequency of a book leaves out the common words of its language, like "the" and "of". */
+    val hideCommonWords: Boolean = false,
     val translation: TranslationSettings = TranslationSettings(),
     val dictionaries: DictionarySettings = DictionarySettings(),
 ) {
@@ -98,8 +100,11 @@ data class TranslationSettings(
     val contextWords: Int = DEFAULT_CONTEXT_WORDS,
     /** How many recently selected fragments keep their translations, so selecting one again needs no requests. */
     val cacheSize: Int = DEFAULT_CACHE_SIZE,
-    /** Translate the selected text at once, showing it at the top of the reader; otherwise only on request. */
-    val autoTranslate: Boolean = true,
+    /**
+     * Translate the selected text at once, showing it at the top of the reader; otherwise only on request. Off to begin
+     * with: every selection would cost a request to each model, even one made by mistake or on the way to another.
+     */
+    val autoTranslate: Boolean = false,
     /** The free service that translates the selection by itself, without its context. */
     val machineService: MachineTranslationService = MachineTranslationService.GOOGLE,
 ) {

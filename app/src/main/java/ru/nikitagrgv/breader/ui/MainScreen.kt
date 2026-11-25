@@ -41,16 +41,25 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 import ru.nikitagrgv.breader.R
 import ru.nikitagrgv.breader.data.AppSettings
+import ru.nikitagrgv.breader.data.Book
 import ru.nikitagrgv.breader.data.Favorite
+import ru.nikitagrgv.breader.data.FavoriteKind
+import ru.nikitagrgv.breader.data.FavoritePlace
 import ru.nikitagrgv.breader.data.favoriteKey
+import ru.nikitagrgv.breader.dictionary.DictionarySource
 import ru.nikitagrgv.breader.dictionary.Kaikki
 import ru.nikitagrgv.breader.dictionary.inUse
 import ru.nikitagrgv.breader.ui.dictionary.DictionaryManagerDialog
 import ru.nikitagrgv.breader.ui.dictionary.DictionarySheet
 import ru.nikitagrgv.breader.ui.dictionary.DictionaryViewModel
+import ru.nikitagrgv.breader.translation.BookSelection
+import ru.nikitagrgv.breader.ui.favorites.FavoriteOrigin
+import ru.nikitagrgv.breader.ui.favorites.FavoriteResult
+import ru.nikitagrgv.breader.ui.favorites.FavoriteSheet
 import ru.nikitagrgv.breader.ui.favorites.FavoritesScreen
 import ru.nikitagrgv.breader.ui.favorites.FavoritesViewModel
 import ru.nikitagrgv.breader.ui.favorites.RemoveFavoritesDialog
+import ru.nikitagrgv.breader.ui.favorites.origin
 import ru.nikitagrgv.breader.ui.library.AddBooksButton
 import ru.nikitagrgv.breader.ui.library.LibraryScreen
 import ru.nikitagrgv.breader.ui.reader.ReaderScreen
@@ -65,6 +74,9 @@ import ru.nikitagrgv.breader.ui.translation.MachineTranslationSheet
 import ru.nikitagrgv.breader.ui.translation.MachineTranslationViewModel
 import ru.nikitagrgv.breader.ui.translation.TranslationSheet
 import ru.nikitagrgv.breader.ui.translation.TranslationViewModel
+import ru.nikitagrgv.breader.ui.translation.describe
+import ru.nikitagrgv.breader.ui.words.WordStatsDialog
+import ru.nikitagrgv.breader.ui.words.WordStatsViewModel
 
 enum class MainTab(@param:StringRes val label: Int, @param:DrawableRes val icon: Int) {
     LIBRARY(R.string.tab_library, R.drawable.ic_library_books),
@@ -92,33 +104,94 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
     var managingDictionaries by rememberSaveable { mutableStateOf(false) }
     // The book whose reading statistics are shown.
     var statsBookId by rememberSaveable { mutableStateOf<String?>(null) }
+    // The book whose words are shown by frequency.
+    var wordStatsBookId by rememberSaveable { mutableStateOf<String?>(null) }
+    val wordStatsViewModel: WordStatsViewModel = viewModel(factory = WordStatsViewModel.Factory)
     val favoritesViewModel: FavoritesViewModel = viewModel(factory = FavoritesViewModel.Factory)
     val favorites by favoritesViewModel.favorites.collectAsStateWithLifecycle()
-    val favoriteKeys by favoritesViewModel.keys.collectAsStateWithLifecycle()
-    // The favorite whose star was pressed again, to confirm removing it.
-    var removingFavorite by remember { mutableStateOf<Favorite?>(null) }
+    val favoriteKinds by favoritesViewModel.kinds.collectAsStateWithLifecycle()
+    val savingFavorites by favoritesViewModel.saving.collectAsStateWithLifecycle()
+    // The favorite whose star was pressed again, with what to remove of it: null for the whole of it. To be confirmed.
+    var removingFavorite by remember { mutableStateOf<Pair<Favorite, FavoriteKind?>?>(null) }
+    // The key of the favorite shown in detail.
+    var shownFavoriteKey by rememberSaveable { mutableStateOf<String?>(null) }
     val context = LocalContext.current
+    val resources = LocalResources.current
     val readerState by viewModel.reader.collectAsStateWithLifecycle()
     val library by viewModel.library.collectAsStateWithLifecycle()
+    val jump by viewModel.jump.collectAsStateWithLifecycle()
     val readerSettings = remember(settings) { settings.toReaderSettings() }
+    val openBook = library?.books?.find { it.id == readerState.bookId }
 
-    /** Adds the word to the favorites with its meanings, or asks whether to remove it, if it's one of them. */
-    fun toggleFavorite(text: String) {
-        val favorite = favorites.find { it.key == favoriteKey(text) }
-        if (favorite != null) {
-            removingFavorite = favorite
-        } else {
-            favoritesViewModel.add(text) {
-                val message = if (hasDictionaries) R.string.favorite_not_found else R.string.favorites_need_dictionary
-                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+    /** Where a selection in the open book is, and what's around it, for keeping it in the favorites. */
+    fun originOf(selection: BookSelection) = FavoriteOrigin(
+        excerpt = selection.excerpt(settings.translation.contextWords),
+        place = openBook?.let { FavoritePlace(it.id, it.fingerprint, it.title, selection.range) },
+    )
+
+    /** Tells what went wrong, or that the text is kept otherwise than it would be at best. */
+    fun showFavoriteResult(result: FavoriteResult) {
+        val message = when (result) {
+            is FavoriteResult.Saved -> when {
+                result.wanted != null -> null
+                result.kind == FavoriteKind.MACHINE -> resources.getString(R.string.favorite_saved_machine)
+                result.kind == null -> resources.getString(R.string.favorite_saved_plain)
+                else -> null
             }
+            FavoriteResult.NotInDictionaries ->
+                resources.getString(if (hasDictionaries) R.string.favorite_not_found else R.string.favorites_need_dictionary)
+            FavoriteResult.ModelsNotSetUp -> resources.getString(R.string.translation_setup_needed)
+            is FavoriteResult.TranslationFailed ->
+                resources.getString(R.string.favorite_translation_failed, result.error.describe(resources))
+        }
+        if (message != null) Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+    }
+
+    /** Keeps the text with the best there is, or asks whether to remove it, if it's kept. */
+    fun toggleFavorite(text: String, origin: FavoriteOrigin?) {
+        val key = favoriteKey(text)
+        val kept = favorites.find { it.key == key }
+        if (kept != null) {
+            removingFavorite = kept to null
+        } else {
+            favoritesViewModel.add(text, origin, kind = null, settings.translation, ::showFavoriteResult)
         }
     }
-    val openBook = library?.books?.find { it.id == readerState.bookId }
+
+    /** Keeps the text with [kind] too, or asks whether to remove that, if it's kept with it. */
+    fun toggleFavoriteKind(text: String, origin: FavoriteOrigin?, kind: FavoriteKind) {
+        val key = favoriteKey(text)
+        val kept = favorites.find { it.key == key }
+        if (kept != null && kind in kept.kinds) {
+            removingFavorite = kept to kind
+        } else {
+            favoritesViewModel.add(text, origin, kind, settings.translation, ::showFavoriteResult)
+        }
+    }
+
+    /** The book a favorite was selected in: the same one, or the same file added again, if it's in the library. */
+    fun bookOf(place: FavoritePlace): Book? {
+        val books = library?.books ?: return null
+        return books.find { it.id == place.bookId }
+            ?: place.fingerprint?.let { fingerprint -> books.find { it.fingerprint == fingerprint } }
+    }
     var tab by rememberSaveable { mutableStateOf(MainTab.READER) }
     // Hidden to begin with, as the app opens on the book being read.
     var readerChromeVisible by rememberSaveable { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
+
+    /** Opens the book a favorite was selected in where it was selected, if the book is in the library. */
+    fun goToPlace(place: FavoritePlace) {
+        val book = bookOf(place)
+        if (book == null) {
+            Toast.makeText(context, resources.getString(R.string.favorite_book_missing, place.bookTitle), Toast.LENGTH_LONG).show()
+            return
+        }
+        shownFavoriteKey = null
+        viewModel.jumpTo(book, place.range)
+        readerChromeVisible = false
+        tab = MainTab.READER
+    }
     // Keeps the saveable state (e.g. scroll positions) of a tab while another one is shown.
     val tabStates = rememberSaveableStateHolder()
 
@@ -171,6 +244,7 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
                     },
                     onRemoveBook = viewModel::removeBook,
                     onShowStats = { statsBookId = it.id },
+                    onShowWords = { wordStatsBookId = it.id },
                     onFavoriteChange = viewModel::setFavorite,
                     onReorder = viewModel::reorderBooks,
                 )
@@ -202,7 +276,9 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
                     },
                     autoTranslate = settings.translation.autoTranslate,
                     onAutoTranslateChange = { enabled -> viewModel.updateTranslationSettings { it.copy(autoTranslate = enabled) } },
-                    onLookUp = { selection -> dictionaryViewModel.lookUp(selection.excerpt(contextWords = 0).fragment) },
+                    onLookUp = { selection ->
+                        dictionaryViewModel.lookUp(selection.excerpt(contextWords = 0).fragment, originOf(selection))
+                    },
                     onGrammar = { selection ->
                         grammarViewModel.explain(
                             excerpt = selection.excerpt(settings.translation.contextWords),
@@ -221,8 +297,12 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
                     onMachineTranslate = { selection ->
                         machineViewModel.translate(selection.excerpt(contextWords = 0).fragment, settings.translation)
                     },
-                    favoriteKeys = favoriteKeys,
-                    onFavorite = { selection -> toggleFavorite(selection.excerpt(contextWords = 0).fragment) },
+                    favoriteKinds = favoriteKinds,
+                    savingFavorites = savingFavorites,
+                    onFavorite = { selection -> toggleFavorite(selection.excerpt(contextWords = 0).fragment, originOf(selection)) },
+                    onFavoriteKind = { selection, kind ->
+                        toggleFavoriteKind(selection.excerpt(contextWords = 0).fragment, originOf(selection), kind)
+                    },
                     moreSelectionActions = settings.moreSelectionActions,
                     onMoreSelectionActionsChange = viewModel::setMoreSelectionActions,
                     selectionFadeMs = settings.selectionFadeMs,
@@ -230,13 +310,23 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
                     // Going from a dictionary entry to managing the dictionaries still keeps the book covered.
                     dialogOpen = translation != null || grammar != null || dictionaryLookup != null || managingDictionaries ||
                         machineTranslation != null,
+                    jump = jump,
+                    onJumpDone = viewModel::onJumpDone,
                     onShowStats = { statsBookId = readerState.bookId },
                     onOpenLibrary = { tab = MainTab.LIBRARY },
                 )
                 MainTab.FAVORITES -> FavoritesScreen(
                     favorites = favorites,
                     contentPadding = innerPadding,
-                    onOpen = { favorite -> dictionaryViewModel.lookUp(favorite.word) },
+                    onOpen = { favorite ->
+                        // The meanings alone are shown by the dictionaries, which may have more by now.
+                        if (favorite.kinds == setOf(FavoriteKind.DICTIONARY)) {
+                            dictionaryViewModel.lookUp(favorite.word, favorite.origin)
+                        } else {
+                            shownFavoriteKey = favorite.key
+                        }
+                    },
+                    onGoToPlace = { favorite -> favorite.place?.let(::goToPlace) },
                     onRemove = favoritesViewModel::remove,
                     onLookUp = { dictionaryViewModel.lookUp("") },
                 )
@@ -300,14 +390,62 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
         )
     }
 
+    shownFavoriteKey?.let { key -> favorites.find { it.key == key } }?.let { favorite ->
+        FavoriteSheet(
+            favorite = favorite,
+            bookTitle = favorite.place?.let(::bookOf)?.title,
+            saving = favorite.key in savingFavorites,
+            onFavorite = { toggleFavorite(favorite.word, favorite.origin) },
+            onFavoriteKind = { kind -> toggleFavoriteKind(favorite.word, favorite.origin, kind) },
+            onOpenDictionary = { dictionaryViewModel.lookUp(favorite.word, favorite.origin) },
+            onGoToPlace = { favorite.place?.let(::goToPlace) },
+            onDismiss = { shownFavoriteKey = null },
+        )
+    }
+
+    // Before the dictionary and the favorites, which are opened from it: windows made later are shown above.
+    val wordStatsBook = wordStatsBookId?.let { id -> library?.books?.find { it.id == id } }
+    if (wordStatsBook != null) {
+        val state by wordStatsViewModel.state.collectAsStateWithLifecycle()
+        val meanings by wordStatsViewModel.meanings.collectAsStateWithLifecycle()
+        // A PDF can only be read while it's open; any other book isn't read again then.
+        val openContent = (readerState as? ReaderState.Ready)?.takeIf { it.bookId == wordStatsBook.id }?.content
+        LaunchedEffect(wordStatsBook.id, openContent) { wordStatsViewModel.count(wordStatsBook, openContent) }
+        WordStatsDialog(
+            book = wordStatsBook,
+            state = state,
+            meanings = meanings,
+            showsMeanings = dictionariesInUse.any { it is DictionarySource.Downloaded },
+            hideCommon = settings.hideCommonWords,
+            onHideCommonChange = viewModel::setHideCommonWords,
+            favoriteKinds = favoriteKinds,
+            savingFavorites = savingFavorites,
+            onLoadMeanings = wordStatsViewModel::loadMeanings,
+            onLookUp = { dictionaryViewModel.lookUp(it) },
+            onFavorite = { toggleFavorite(it, origin = null) },
+            onFavoriteKind = { text, kind -> toggleFavoriteKind(text, origin = null, kind) },
+            onOpenBook = {
+                viewModel.openBook(wordStatsBook)
+                readerChromeVisible = false
+                tab = MainTab.READER
+            },
+            onDismiss = {
+                wordStatsViewModel.close()
+                wordStatsBookId = null
+            },
+        )
+    }
+
     dictionaryLookup?.let { lookup ->
         DictionarySheet(
             lookup = lookup,
             suggestions = dictionarySuggestions,
             hasDictionaries = hasDictionaries,
-            favorite = favoriteKey(lookup.text) in favoriteKeys,
-            onFavorite = { toggleFavorite(lookup.text) },
-            onLookUp = dictionaryViewModel::lookUp,
+            favoriteKinds = favoriteKinds[favoriteKey(lookup.text)],
+            savingFavorite = favoriteKey(lookup.text) in savingFavorites,
+            onFavorite = { toggleFavorite(lookup.text, lookup.origin) },
+            onFavoriteKind = { kind -> toggleFavoriteKind(lookup.text, lookup.origin, kind) },
+            onLookUp = { dictionaryViewModel.lookUp(it) },
             onSuggest = dictionaryViewModel::suggest,
             onOpenDictionaries = {
                 dictionaryViewModel.dismissLookup()
@@ -317,12 +455,15 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
         )
     }
 
-    removingFavorite?.let { favorite ->
+    removingFavorite?.let { (favorite, kind) ->
+        // Removing the only thing it's kept with removes it.
+        val part = kind?.takeIf { favorite.kinds != setOf(it) }
         RemoveFavoritesDialog(
             word = favorite.word,
             count = 1,
+            kind = part,
             onConfirm = {
-                favoritesViewModel.remove(setOf(favorite.key))
+                if (part != null) favoritesViewModel.remove(favorite.key, part) else favoritesViewModel.remove(setOf(favorite.key))
                 removingFavorite = null
             },
             onDismiss = { removingFavorite = null },
@@ -344,7 +485,16 @@ fun MainScreen(viewModel: MainViewModel, settings: AppSettings) {
     statsBookId?.let { id ->
         // Follows the library, so the numbers keep up while it's open.
         val book = library?.books?.find { it.id == id }
-        if (book != null) ReadingStatsSheet(book = book, onDismiss = { statsBookId = null })
+        if (book != null) {
+            ReadingStatsSheet(
+                book = book,
+                onShowWords = {
+                    statsBookId = null
+                    wordStatsBookId = id
+                },
+                onDismiss = { statsBookId = null },
+            )
+        }
     }
 }
 

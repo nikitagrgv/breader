@@ -76,6 +76,7 @@ fun LibraryScreen(
     onOpenBook: (Book) -> Unit,
     onRemoveBook: (Book) -> Unit,
     onShowStats: (Book) -> Unit,
+    onShowWords: (Book) -> Unit,
     onFavoriteChange: (Book, Boolean) -> Unit,
     onReorder: (List<String>) -> Unit,
     modifier: Modifier = Modifier,
@@ -130,6 +131,7 @@ fun LibraryScreen(
                                 onOpen = { onOpenBook(book) },
                                 onRemove = { onRemoveBook(book) },
                                 onShowStats = { onShowStats(book) },
+                                onShowWords = { onShowWords(book) },
                                 onFavoriteChange = { onFavoriteChange(book, it) },
                                 item = reorderableItem(reorder, id),
                             )
@@ -162,6 +164,7 @@ private fun BookItem(
     onOpen: () -> Unit,
     onRemove: () -> Unit,
     onShowStats: () -> Unit,
+    onShowWords: () -> Unit,
     onFavoriteChange: (Boolean) -> Unit,
     item: ReorderableItem,
 ) {
@@ -208,6 +211,13 @@ private fun BookItem(
                             onClick = {
                                 menuExpanded = false
                                 onShowStats()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.word_stats)) },
+                            onClick = {
+                                menuExpanded = false
+                                onShowWords()
                             },
                         )
                         DropdownMenuItem(

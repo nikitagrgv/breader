@@ -111,11 +111,13 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.filterNot
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import ru.nikitagrgv.breader.R
 import ru.nikitagrgv.breader.data.ReadingPosition
 import ru.nikitagrgv.breader.data.percentOf
+import ru.nikitagrgv.breader.data.FavoriteKind
 import ru.nikitagrgv.breader.data.favoriteKey
 import ru.nikitagrgv.breader.data.SeekBarPosition
 import ru.nikitagrgv.breader.format.BookContent
@@ -124,8 +126,10 @@ import ru.nikitagrgv.breader.format.InlineStyle
 import ru.nikitagrgv.breader.format.Paragraph
 import ru.nikitagrgv.breader.format.ParagraphKind
 import ru.nikitagrgv.breader.format.PdfBook
+import ru.nikitagrgv.breader.translation.BookRange
 import ru.nikitagrgv.breader.translation.BookSelection
 import ru.nikitagrgv.breader.ui.DotSeparatedText
+import ru.nikitagrgv.breader.ui.ReaderJump
 import ru.nikitagrgv.breader.ui.translation.TranslationPreview
 import ru.nikitagrgv.breader.ui.translation.TranslationState
 import kotlin.math.roundToInt
@@ -145,6 +149,8 @@ import kotlin.math.roundToInt
  * @param selectionFadeMs how long the place of the selection fades out after a dialog about it is closed; 0 for not showing it.
  * @param selectionHistorySize how many selections the book's history keeps; 0 if it's off.
  * @param dialogOpen whether a dialog opened from the selection's actions is still over the book.
+ * @param jump a place to show in the book, see [ru.nikitagrgv.breader.ui.MainViewModel.jumpTo]; [onJumpDone] is called
+ *   once it's shown.
  */
 @Composable
 fun ReaderScreen(
@@ -168,13 +174,17 @@ fun ReaderScreen(
     onGrammar: (BookSelection) -> Unit,
     onQuickTranslate: (BookSelection) -> Unit,
     onMachineTranslate: (BookSelection) -> Unit,
-    favoriteKeys: Set<String>,
+    favoriteKinds: Map<String, Set<FavoriteKind>>,
+    savingFavorites: Set<String>,
     onFavorite: (BookSelection) -> Unit,
+    onFavoriteKind: (BookSelection, FavoriteKind) -> Unit,
     moreSelectionActions: Boolean,
     onMoreSelectionActionsChange: (Boolean) -> Unit,
     selectionFadeMs: Int,
     selectionHistorySize: Int,
     dialogOpen: Boolean,
+    jump: ReaderJump?,
+    onJumpDone: () -> Unit,
     onShowStats: () -> Unit,
     onOpenLibrary: () -> Unit,
     modifier: Modifier = Modifier,
@@ -220,13 +230,17 @@ fun ReaderScreen(
                         onGrammar = onGrammar,
                         onQuickTranslate = onQuickTranslate,
                         onMachineTranslate = onMachineTranslate,
-                        favoriteKeys = favoriteKeys,
+                        favoriteKinds = favoriteKinds,
+                        savingFavorites = savingFavorites,
                         onFavorite = onFavorite,
+                        onFavoriteKind = onFavoriteKind,
                         moreSelectionActions = moreSelectionActions,
                         onMoreSelectionActionsChange = onMoreSelectionActionsChange,
                         selectionFadeMs = selectionFadeMs,
                         selectionHistorySize = selectionHistorySize,
                         dialogOpen = dialogOpen,
+                        jump = jump?.takeIf { it.bookId == state.bookId }?.range,
+                        onJumpDone = onJumpDone,
                         onShowStats = onShowStats,
                     )
                 }
@@ -264,13 +278,17 @@ private fun BookText(
     onGrammar: (BookSelection) -> Unit,
     onQuickTranslate: (BookSelection) -> Unit,
     onMachineTranslate: (BookSelection) -> Unit,
-    favoriteKeys: Set<String>,
+    favoriteKinds: Map<String, Set<FavoriteKind>>,
+    savingFavorites: Set<String>,
     onFavorite: (BookSelection) -> Unit,
+    onFavoriteKind: (BookSelection, FavoriteKind) -> Unit,
     moreSelectionActions: Boolean,
     onMoreSelectionActionsChange: (Boolean) -> Unit,
     selectionFadeMs: Int,
     selectionHistorySize: Int,
     dialogOpen: Boolean,
+    jump: BookRange?,
+    onJumpDone: () -> Unit,
     onShowStats: () -> Unit,
 ) {
     val paragraphs = state.content.paragraphs
@@ -372,6 +390,28 @@ private fun BookText(
                 currentCoroutineContext().ensureActive()
             }
         }
+    }
+
+    // A place asked for from elsewhere, like where a favorite was selected, is brought into view and selected. Done only
+    // once it's shown: leaving the reader on the way, as by switching tabs, leaves it to be shown when coming back.
+    val currentOnJumpDone by rememberUpdatedState(onJumpDone)
+    LaunchedEffect(jump) {
+        val range = jump ?: return@LaunchedEffect
+        // Where it lands depends on the size of the list, which is known once it's laid out.
+        snapshotFlow { listState.layoutInfo.viewportSize.height }.first { it > 0 }
+        selection.prepare(range)
+        val target = range.inBook(selection.paragraphs)
+        if (target != null) {
+            history.holdsPosition = false
+            try {
+                bringIntoView(target, selection, listState, viewport, freeArea())
+            } catch (e: CancellationException) {
+                // A finger has stopped the scrolling, unless this jump is cancelled itself.
+                currentCoroutineContext().ensureActive()
+            }
+            if (!selection.select(target, partly = true)) fade.place = target
+        }
+        currentOnJumpDone()
     }
 
     // The bars only get in the way while reading, so they're hidden once the user drags the text
@@ -550,8 +590,10 @@ private fun BookText(
                 // The selection stays: the quick translation is shown for it, the star is filled for it.
                 onQuickTranslate = { selection.locate()?.let(onQuickTranslate) },
                 onMachineTranslate = { openDialog(onMachineTranslate) },
-                favorite = favoriteKey(selectedText) in favoriteKeys,
+                favoriteKinds = favoriteKinds[favoriteKey(selectedText)],
+                savingFavorite = favoriteKey(selectedText) in savingFavorites,
                 onFavorite = { selection.locate()?.let(onFavorite) },
+                onFavoriteKind = { kind -> selection.locate()?.let { onFavoriteKind(it, kind) } },
                 autoTranslate = autoTranslate,
                 onAutoTranslateChange = onAutoTranslateChange,
                 onLookUp = { openDialog(onLookUp) },

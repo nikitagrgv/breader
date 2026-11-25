@@ -137,6 +137,15 @@ class Dictionaries(private val downloaded: DictionaryRepository, private val set
         return found
     }
 
+    /**
+     * What the downloaded dictionaries that are turned on have for [text], in the order of the settings. Nothing is
+     * asked online, so it's quick, and many words can be looked up at a time.
+     */
+    suspend fun lookupDownloaded(text: String): List<DictionaryResult> {
+        val dictionaries = settings.first().dictionaries
+        return dictionaries.ordered(downloaded.lookup(text, skip = dictionaries.disabled)) { it.source.orderKey }
+    }
+
     /** Words of the downloaded dictionaries that are turned on that start with [prefix], for completing what's being typed. */
     suspend fun wordsStartingWith(prefix: String, limit: Int): List<String> =
         downloaded.wordsStartingWith(prefix, limit, skip = settings.first().dictionaries.disabled)

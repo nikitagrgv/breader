@@ -23,7 +23,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -45,26 +44,32 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import ru.nikitagrgv.breader.R
+import ru.nikitagrgv.breader.data.FavoriteKind
 import ru.nikitagrgv.breader.dictionary.DictionaryEntry
 import ru.nikitagrgv.breader.dictionary.DictionaryResult
 import ru.nikitagrgv.breader.dictionary.DictionarySource
 import ru.nikitagrgv.breader.dictionary.LookupFailure
 import ru.nikitagrgv.breader.dictionary.OnlineDictionary
 import ru.nikitagrgv.breader.ui.BottomSheet
+import ru.nikitagrgv.breader.ui.favorites.FavoriteButton
 
 /**
  * The dictionary entries of a text in detail: all the senses with examples. The text is in a field, so that another
  * word can be looked up from here: the words of the downloaded dictionaries that start with what's typed are offered.
  * @param hasDictionaries whether any are downloaded or online; if not, [onOpenDictionaries] is offered.
- * @param favorite whether the looked up word is one of the favorites, which the star by the field adds it to.
+ * @param favoriteKinds what the looked up text is kept with in the favorites, which the star by the field keeps it in;
+ *   null if it isn't kept.
+ * @param savingFavorite whether it's being added to them.
  */
 @Composable
 fun DictionarySheet(
     lookup: DictionaryLookup,
     suggestions: List<String>,
     hasDictionaries: Boolean,
-    favorite: Boolean,
+    favoriteKinds: Set<FavoriteKind>?,
+    savingFavorite: Boolean,
     onFavorite: () -> Unit,
+    onFavoriteKind: (FavoriteKind) -> Unit,
     onLookUp: (String) -> Unit,
     onSuggest: (String) -> Unit,
     onOpenDictionaries: () -> Unit,
@@ -108,16 +113,16 @@ fun DictionarySheet(
                     focus = focus,
                     modifier = Modifier.weight(1f),
                 )
-                // For what's looked up, not for what's being typed; a word that nothing is found for has no meanings to keep.
-                val results = lookup.results
-                if (!editing && lookup.text.isNotEmpty() && (favorite || !results.isNullOrEmpty())) {
-                    IconButton(onClick = onFavorite, modifier = Modifier.padding(start = 4.dp)) {
-                        Icon(
-                            painterResource(if (favorite) R.drawable.ic_star else R.drawable.ic_star_outline),
-                            contentDescription = stringResource(if (favorite) R.string.remove_from_favorites else R.string.add_to_favorites),
-                            tint = if (favorite) MaterialTheme.colorScheme.primary else LocalContentColor.current,
-                        )
-                    }
+                // For what's looked up, not for what's being typed. One that the dictionaries don't have is kept with
+                // a translation.
+                if (!editing && lookup.text.isNotEmpty()) {
+                    FavoriteButton(
+                        kinds = favoriteKinds,
+                        saving = savingFavorite,
+                        onClick = onFavorite,
+                        onKindClick = onFavoriteKind,
+                        modifier = Modifier.padding(start = 4.dp),
+                    )
                 }
             }
             Spacer(Modifier.height(16.dp))

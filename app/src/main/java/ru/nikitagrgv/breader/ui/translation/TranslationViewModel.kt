@@ -1,12 +1,10 @@
 package ru.nikitagrgv.breader.ui.translation
 
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
@@ -26,13 +24,10 @@ import ru.nikitagrgv.breader.dictionary.DictionaryResult
 import ru.nikitagrgv.breader.dictionary.BriefEntry
 import ru.nikitagrgv.breader.dictionary.brief
 import ru.nikitagrgv.breader.translation.Excerpt
-import ru.nikitagrgv.breader.translation.OpenRouter
 import ru.nikitagrgv.breader.translation.OpenRouterException
-import ru.nikitagrgv.breader.translation.RequestKind
 import ru.nikitagrgv.breader.translation.Translation
 import ru.nikitagrgv.breader.translation.TranslationCache
 import ru.nikitagrgv.breader.translation.TranslationKey
-import ru.nikitagrgv.breader.translation.TranslationPrompt
 import ru.nikitagrgv.breader.web.WebServiceException
 import java.io.IOException
 import java.net.SocketTimeoutException
@@ -75,7 +70,7 @@ data class TranslationState(
  * ones are cached.
  */
 class TranslationViewModel(
-    private val openRouter: OpenRouter,
+    private val translator: ModelTranslator,
     private val cache: TranslationCache,
     private val dictionaries: Dictionaries,
 ) : ViewModel() {
@@ -216,48 +211,26 @@ class TranslationViewModel(
     }
 
     private fun request(model: String) {
-        val excerpt = state.value?.excerpt ?: return
+        if (state.value == null) return
         val key = key ?: return
         val settings = settings
         // Waited for again.
         state.update { state -> state?.copy(results = state.results - model) }
         viewModelScope.launch(requests) {
-            val language = settings.effectiveTargetLanguage
-            val result = try {
-                val reply = openRouter.chat(
-                    apiKey = settings.apiKey,
-                    model = model,
-                    system = TranslationPrompt.system(language),
-                    user = TranslationPrompt.user(excerpt, settings.sourceLanguage, language),
-                    kind = RequestKind.TRANSLATION,
-                    fragment = excerpt.fragment,
-                )
-                TranslationPrompt.parse(reply)?.let { ModelResult.Done(it) }
-                    ?: ModelResult.Failed(TranslationError(TranslationError.Kind.BAD_REPLY)).also {
-                        Log.w(TAG, "No translation in the reply of $model: $reply")
-                    }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.w(TAG, "Translation by $model failed", e)
-                ModelResult.Failed(e.toTranslationError())
-            }
-            if (result is ModelResult.Done) cache.put(key, model, result.translation)
+            val result = translator.translate(key, model, settings)
             // Added to the end: the results stay in the order they came.
             state.update { state -> state?.copy(results = state.results - model + (model to result)) }
         }
     }
 
     companion object {
-        private const val TAG = "TranslationViewModel"
-
         /** How long the selection has to stay the same before the models are asked. */
         private const val SELECTION_DELAY_MS = 500L
 
         val Factory = viewModelFactory {
             initializer {
                 val app = this[APPLICATION_KEY] as BreaderApplication
-                TranslationViewModel(app.openRouter, app.translationCache, app.dictionaries)
+                TranslationViewModel(app.modelTranslator, app.translationCache, app.dictionaries)
             }
         }
     }

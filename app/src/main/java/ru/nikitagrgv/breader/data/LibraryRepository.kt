@@ -114,6 +114,10 @@ class LibraryRepository(context: Context) {
         library.copy(books = library.books.map { if (it.id == id) it.copy(wordCount = count) else it })
     }
 
+    fun setFingerprint(id: String, fingerprint: String) = mutate { library ->
+        library.copy(books = library.books.map { if (it.id == id) it.copy(fingerprint = fingerprint) else it })
+    }
+
     fun updateSelectionHistory(id: String, history: List<BookRange>) =
         mutate(saveDelayMs = 1_000) { library ->
             library.copy(books = library.books.map {
@@ -200,6 +204,7 @@ class LibraryRepository(context: Context) {
         .apply { if (wordCount != null) put("words", wordCount) }
         .put("selectionHistory", JSONArray(selectionHistory.toInts()))
         .apply { if (favorite) put("favorite", true) }
+        .apply { if (fingerprint != null) put("fingerprint", fingerprint) }
 
     private fun JSONObject.toBook() = Book(
         id = getString("id"),
@@ -220,6 +225,7 @@ class LibraryRepository(context: Context) {
             ?.let { array -> rangesFromInts((0 until array.length()).map { array.optInt(it, -1) }) }
             .orEmpty(),
         favorite = optBoolean("favorite"),
+        fingerprint = optString("fingerprint").ifEmpty { null },
     )
 
     private companion object {

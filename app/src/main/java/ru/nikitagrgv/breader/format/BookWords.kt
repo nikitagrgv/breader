@@ -25,7 +25,9 @@ fun countWords(text: CharSequence): Int {
 }
 
 /** Apostrophes, hyphens and the soft hyphen, which some books put inside long words. */
-private const val WORD_JOINERS = "'’‐-­"
+internal const val WORD_JOINERS = "'’‐-­"
+
+internal const val SOFT_HYPHEN = '\u00AD'
 
 /**
  * How the words of a book are spread over its paragraphs, for telling how much of it is read. Unlike paragraphs, which

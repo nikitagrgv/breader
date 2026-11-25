@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -52,9 +53,10 @@ private enum class StatsMode { TIME, SPEED }
 /**
  * How a book is read: the time spent at each percent of it and the speed there, in words per hour, with the totals
  * above. A bar is told in full by touching it.
+ * @param onShowWords shows the words of the book by frequency.
  */
 @Composable
-fun ReadingStatsSheet(book: Book, onDismiss: () -> Unit) {
+fun ReadingStatsSheet(book: Book, onShowWords: () -> Unit, onDismiss: () -> Unit) {
     val stats = remember(book) { ReadingStats(book) }
     var mode by rememberSaveable { mutableStateOf(StatsMode.TIME) }
     var selected by remember { mutableStateOf<Int?>(null) }
@@ -101,6 +103,10 @@ fun ReadingStatsSheet(book: Book, onDismiss: () -> Unit) {
                     value = stats.timeLeftMs?.let { time(it) } ?: "—",
                     modifier = Modifier.weight(1f),
                 )
+            }
+            Spacer(Modifier.height(16.dp))
+            OutlinedButton(onClick = onShowWords, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.word_stats))
             }
             Spacer(Modifier.height(24.dp))
 

@@ -43,6 +43,11 @@ data class Book(
     val selectionHistory: List<BookRange> = emptyList(),
     /** Starred by the user: such books are listed first in the library. */
     val favorite: Boolean = false,
+    /**
+     * What tells the book's file apart from any other, see [BookFiles.fingerprint]: the same book added again, under
+     * another name or from another place, has the same one. Null until it's taken, which is done in the background.
+     */
+    val fingerprint: String? = null,
 )
 
 /** What [Book.timeByPercent] splits a book into. */
