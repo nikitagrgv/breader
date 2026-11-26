@@ -81,6 +81,7 @@ import ru.nikitagrgv.breader.format.PdfBook
 import ru.nikitagrgv.breader.format.PdfPageSize
 import ru.nikitagrgv.breader.format.PdfPageText
 import ru.nikitagrgv.breader.format.PdfRect
+import ru.nikitagrgv.breader.translation.BookSelection
 import ru.nikitagrgv.breader.translation.TextPosition
 import kotlin.math.max
 import kotlin.math.min
@@ -190,6 +191,7 @@ internal class PdfViewport(initialZoom: Float, initialPan: Float) {
  * The pages of a PDF one under another, as images. They fit the width of the screen and can be enlarged by pinching,
  * as there's no font size to set. Text is selected as usual: by a long press, which goes on by dragging, and by the
  * handles.
+ * @param reselectMarked whether a tap on the place marked by [fade] selects it again.
  */
 @Composable
 internal fun PdfPages(
@@ -197,6 +199,7 @@ internal fun PdfPages(
     listState: LazyListState,
     viewport: PdfViewport,
     fade: SelectionFade,
+    reselectMarked: Boolean,
     onToggleChrome: () -> Unit,
     onHideChrome: () -> Unit,
     modifier: Modifier = Modifier,
@@ -214,6 +217,7 @@ internal fun PdfPages(
     val drag = remember(selection, listState, viewport, density) {
         SelectionDrag(selection, PageGeometry(book, listState, viewport), with(density) { LongPressReach.toPx() })
     }
+    val markReach = with(density) { MarkTouchReach.toPx() }
 
     LaunchedEffect(panInteractions) {
         panInteractions.interactions.collect {
@@ -266,7 +270,19 @@ internal fun PdfPages(
                         }
                     },
                 )
-            },
+            }
+            // Under the gestures above, so that it gets the tap first and takes it from them.
+            .then(
+                if (reselectMarked) {
+                    Modifier.selectMarkedOnTap(
+                        fade = fade,
+                        hits = { place, point -> drag.geometry.isOn(place, point, markReach) },
+                        select = { place -> selection.selectMarked(place, fade) },
+                    )
+                } else {
+                    Modifier
+                },
+            ),
     ) {
         LazyColumn(
             state = listState,
@@ -468,6 +484,16 @@ private class PageGeometry(private val book: PdfBook, private val list: LazyList
         } ?: return null
         val scale = pxPerPoint(item.index)
         return PagePoint(item.index, (point.x + viewport.pan) / scale, (y - item.offset) / scale, scale)
+    }
+
+    /** Whether [point] of the view is on the lines of [place], or no further than [reach] px from them. */
+    fun isOn(place: BookSelection, point: Offset, reach: Float): Boolean {
+        val hit = pageAt(point) ?: return false
+        val text = book.loadedText(hit.page) ?: return false
+        val margin = reach / hit.pxPerPoint
+        return place.rectsOn(hit.page, text).any {
+            hit.x in (it.left - margin)..(it.right + margin) && hit.y in (it.top - margin)..(it.bottom + margin)
+        }
     }
 
     private fun viewPoint(page: Int, x: Float, y: Float): Offset? {

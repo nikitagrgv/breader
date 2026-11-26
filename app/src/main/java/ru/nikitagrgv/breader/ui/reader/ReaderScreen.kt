@@ -74,6 +74,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -147,6 +148,7 @@ import kotlin.math.roundToInt
  * @param onMachineTranslate translates the selection by a free service, which doesn't get the context.
  * @param onShowStats shows the reading statistics of the open book.
  * @param selectionFadeMs how long the place of the selection fades out after a dialog about it is closed; 0 for not showing it.
+ * @param reselectMarked whether a tap on the place, while it's marked, selects it again.
  * @param selectionHistorySize how many selections the book's history keeps; 0 if it's off.
  * @param dialogOpen whether a dialog opened from the selection's actions is still over the book.
  * @param jump a place to show in the book, see [ru.nikitagrgv.breader.ui.MainViewModel.jumpTo]; [onJumpDone] is called
@@ -181,6 +183,7 @@ fun ReaderScreen(
     moreSelectionActions: Boolean,
     onMoreSelectionActionsChange: (Boolean) -> Unit,
     selectionFadeMs: Int,
+    reselectMarked: Boolean,
     selectionHistorySize: Int,
     dialogOpen: Boolean,
     jump: ReaderJump?,
@@ -237,6 +240,7 @@ fun ReaderScreen(
                         moreSelectionActions = moreSelectionActions,
                         onMoreSelectionActionsChange = onMoreSelectionActionsChange,
                         selectionFadeMs = selectionFadeMs,
+                        reselectMarked = reselectMarked,
                         selectionHistorySize = selectionHistorySize,
                         dialogOpen = dialogOpen,
                         jump = jump?.takeIf { it.bookId == state.bookId }?.range,
@@ -285,6 +289,7 @@ private fun BookText(
     moreSelectionActions: Boolean,
     onMoreSelectionActionsChange: (Boolean) -> Unit,
     selectionFadeMs: Int,
+    reselectMarked: Boolean,
     selectionHistorySize: Int,
     dialogOpen: Boolean,
     jump: BookRange?,
@@ -470,6 +475,7 @@ private fun BookText(
                 listState = listState,
                 viewport = viewport,
                 fade = fade,
+                reselectMarked = reselectMarked,
                 onToggleChrome = onToggleChrome,
                 onHideChrome = onHideChrome,
             )
@@ -479,6 +485,7 @@ private fun BookText(
                 selection = selection,
                 listState = listState,
                 fade = fade,
+                reselectMarked = reselectMarked,
                 onToggleChrome = onToggleChrome,
             )
         }
@@ -636,6 +643,7 @@ private fun ParagraphList(
     selection: TextSelection,
     listState: LazyListState,
     fade: SelectionFade,
+    reselectMarked: Boolean,
     onToggleChrome: () -> Unit,
 ) {
     val looks = rememberParagraphLooks(settings)
@@ -678,6 +686,7 @@ private fun ParagraphList(
                         look = looks.getValue(paragraph.kind),
                         modifier = if (blankLines > 0) Modifier.padding(top = blankLine * blankLines) else Modifier,
                         fade = fade,
+                        selectMarked = if (reselectMarked) { place -> selection.selectMarked(place, fade) } else null,
                     )
                 }
             }
@@ -797,6 +806,7 @@ private fun LazyListState.middleItemIndex(): Int {
 /**
  * @param index the paragraph's index in the book, if it's from the book.
  * @param fade the place to mark, for a paragraph from the book.
+ * @param selectMarked selects the marked place again when it's tapped, see [selectMarked]; null if a tap isn't to.
  */
 @Composable
 private fun ParagraphText(
@@ -805,9 +815,11 @@ private fun ParagraphText(
     look: ParagraphLook,
     modifier: Modifier = Modifier,
     fade: SelectionFade? = null,
+    selectMarked: ((BookSelection) -> Boolean)? = null,
 ) {
     val text = remember(paragraph, index) { paragraph.toAnnotatedString(index) }
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    val reach = with(LocalDensity.current) { MarkTouchReach.toPx() }
     Text(
         text = text,
         style = look.style,
@@ -815,6 +827,21 @@ private fun ParagraphText(
         modifier = modifier
             .fillMaxWidth()
             .padding(look.padding)
+            // Inside the padding, like the drawing below.
+            .then(
+                if (index != null && fade != null && selectMarked != null) {
+                    Modifier.selectMarkedOnTap(
+                        fade = fade,
+                        hits = { place, point ->
+                            val part = place.partOf(index)
+                            part != null && layout?.covers(part.first, part.second, point, reach) == true
+                        },
+                        select = selectMarked,
+                    )
+                } else {
+                    Modifier
+                },
+            )
             // Inside the padding: the layout knows nothing about it. Only drawn again as the fading goes on.
             .drawWithCache {
                 val part = index?.let { fade?.place?.partOf(it) }
@@ -824,6 +851,20 @@ private fun ParagraphText(
                 }
             },
     )
+}
+
+/** Whether [point] is on the characters from [start] to [end] (exclusive), or no further than [reach] from them. */
+private fun TextLayoutResult.covers(start: Int, end: Int, point: Offset, reach: Float): Boolean {
+    val last = minOf(end, layoutInput.text.length) - 1
+    if (last < start) return false
+    for (line in getLineForOffset(start)..getLineForOffset(last)) {
+        // Only the lines at the point are looked at, as a selection can be a whole paragraph.
+        if (point.y < getLineTop(line) - reach || point.y > getLineBottom(line) + reach) continue
+        for (offset in maxOf(start, getLineStart(line))..minOf(last, getLineEnd(line) - 1)) {
+            if (getBoundingBox(offset).inflate(reach).contains(point)) return true
+        }
+    }
+    return false
 }
 
 private fun Paragraph.toAnnotatedString(index: Int?): AnnotatedString = buildAnnotatedString {

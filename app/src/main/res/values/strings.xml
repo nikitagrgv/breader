@@ -146,6 +146,8 @@
     <string name="selection_fade_summary">After you close a translation, a grammar explanation or a dictionary entry, or go to another selection with the arrows, the text you left is marked in orange for this long, fading away, so you don\'t lose your place.</string>
     <string name="selection_fade_value">%1$.1f s</string>
     <string name="selection_fade_off">Off</string>
+    <string name="reselect_marked">Tap the mark to select again</string>
+    <string name="reselect_marked_summary">While the text you left is still marked in orange, tap it to select it again, e.g. to add it to favorites or look it up elsewhere. A longer mark gives you more time for that.</string>
     <string name="selection_history_size">History size</string>
     <string name="selection_history_size_summary">How many selections each book keeps for the arrows in the reader. When there are more, the oldest ones are dropped. When it\'s off, the arrows are hidden and nothing new is kept.</string>
     <string name="selection_history_off">Off</string>

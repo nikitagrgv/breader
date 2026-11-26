@@ -88,6 +88,7 @@ fun SettingsScreen(
     onHyphenationChange: (Boolean) -> Unit,
     onSeekBarPositionChange: (SeekBarPosition) -> Unit,
     onSelectionFadeChange: (Int) -> Unit,
+    onReselectMarkedChange: (Boolean) -> Unit,
     onSelectionHistorySizeChange: (Int) -> Unit,
     onTranslationChange: ((TranslationSettings) -> TranslationSettings) -> Unit,
     cachedTranslations: Int,
@@ -250,6 +251,16 @@ fun SettingsScreen(
             onPositionChangeFinished = { onSelectionFadeChange(selectionFade.roundToInt()) },
             range = 0f..AppSettings.MAX_SELECTION_FADE_MS.toFloat(),
             steps = AppSettings.MAX_SELECTION_FADE_MS / AppSettings.SELECTION_FADE_STEP_MS - 1,
+        )
+        ListItem(
+            headlineContent = { Text(stringResource(R.string.reselect_marked)) },
+            supportingContent = { Text(stringResource(R.string.reselect_marked_summary)) },
+            trailingContent = { Switch(checked = settings.reselectMarked, onCheckedChange = null) },
+            modifier = Modifier.toggleable(
+                value = settings.reselectMarked,
+                role = Role.Switch,
+                onValueChange = onReselectMarkedChange,
+            ),
         )
         SliderSetting(
             title = R.string.selection_history_size,

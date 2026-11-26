@@ -42,6 +42,7 @@ class SettingsRepository(context: Context) {
                     ?: defaults.seekBarPosition,
                 moreSelectionActions = prefs[MORE_SELECTION_ACTIONS] ?: defaults.moreSelectionActions,
                 selectionFadeMs = prefs[SELECTION_FADE_MS] ?: defaults.selectionFadeMs,
+                reselectMarked = prefs[RESELECT_MARKED] ?: defaults.reselectMarked,
                 selectionHistorySize = prefs[SELECTION_HISTORY_SIZE] ?: defaults.selectionHistorySize,
                 hideCommonWords = prefs[HIDE_COMMON_WORDS] ?: defaults.hideCommonWords,
                 translation = prefs.translationSettings(),
@@ -83,6 +84,10 @@ class SettingsRepository(context: Context) {
 
     suspend fun setSelectionFade(ms: Int) {
         dataStore.edit { it[SELECTION_FADE_MS] = ms.coerceIn(0, AppSettings.MAX_SELECTION_FADE_MS) }
+    }
+
+    suspend fun setReselectMarked(enabled: Boolean) {
+        dataStore.edit { it[RESELECT_MARKED] = enabled }
     }
 
     suspend fun setSelectionHistorySize(size: Int) {
@@ -166,6 +171,7 @@ class SettingsRepository(context: Context) {
         val SEEK_BAR_POSITION = stringPreferencesKey("seek_bar_position")
         val MORE_SELECTION_ACTIONS = booleanPreferencesKey("more_selection_actions")
         val SELECTION_FADE_MS = intPreferencesKey("selection_fade_ms")
+        val RESELECT_MARKED = booleanPreferencesKey("reselect_marked")
         val SELECTION_HISTORY_SIZE = intPreferencesKey("selection_history_size")
         val HIDE_COMMON_WORDS = booleanPreferencesKey("hide_common_words")
         val OPENROUTER_KEY = stringPreferencesKey("openrouter_key")

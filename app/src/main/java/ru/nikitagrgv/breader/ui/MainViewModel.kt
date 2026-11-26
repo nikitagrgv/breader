@@ -194,6 +194,10 @@ class MainViewModel(
         viewModelScope.launch { settingsRepository.setSelectionFade(ms) }
     }
 
+    fun setReselectMarked(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setReselectMarked(enabled) }
+    }
+
     fun setSelectionHistorySize(size: Int) {
         viewModelScope.launch { settingsRepository.setSelectionHistorySize(size) }
     }

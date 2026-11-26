@@ -61,6 +61,8 @@ data class AppSettings(
     val moreSelectionActions: Boolean = false,
     /** How long the place of the selection takes to fade out after a dialog about it is closed; 0 for not showing it. */
     val selectionFadeMs: Int = DEFAULT_SELECTION_FADE_MS,
+    /** Whether a tap on that place, while it's still marked, selects it again, e.g. to add it to the favorites after all. */
+    val reselectMarked: Boolean = true,
     /** How many selections each book's history keeps; 0 turns the history off, without losing what's in it. */
     val selectionHistorySize: Int = DEFAULT_SELECTION_HISTORY_SIZE,
     /** Whether the word frequency of a book leaves out the common words of its language, like "the" and "of". */
