@@ -7,11 +7,14 @@ import java.text.Normalizer
  * Dictionaries mark the stress in some languages (Russian "соба́ка"), which books don't do.
  */
 fun dictionaryKey(text: String): String =
-    Normalizer.normalize(text.trim(), Normalizer.Form.NFC)
-        .replace(STRESS_MARKS, "")
+    withoutStressMarks(text.trim())
         .lowercase()
         .replace(APOSTROPHES, "'")
         .replace(WHITESPACE, " ")
+
+/** [text] with its letters composed, so that the marks left are the stress marks, and without them. */
+internal fun withoutStressMarks(text: String): String =
+    Normalizer.normalize(text, Normalizer.Form.NFC).replace(STRESS_MARKS, "")
 
 /**
  * Keys to look up the selected [text] by, in groups from the best: a group is only tried when nothing

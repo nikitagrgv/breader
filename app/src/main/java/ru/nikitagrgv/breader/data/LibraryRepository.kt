@@ -21,6 +21,7 @@ import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
 import org.json.JSONObject
 import ru.nikitagrgv.breader.format.BookFormat
+import ru.nikitagrgv.breader.translation.BookRange
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.IOException
@@ -81,6 +82,13 @@ class LibraryRepository(context: Context) {
 
     fun setCurrentBook(id: String?) = mutate { it.copy(currentBookId = id) }
 
+    fun setFavorite(id: String, favorite: Boolean) = mutate { library ->
+        library.copy(books = library.books.map { if (it.id == id) it.copy(favorite = favorite) else it })
+    }
+
+    /** Puts the books with the [ids] in this order into the places that they take in the library; the rest stay where they are. */
+    fun reorderBooks(ids: List<String>) = mutate { library -> library.copy(books = library.books.reordered(ids) { it.id }) }
+
     fun updatePosition(id: String, position: ReadingPosition, progress: Float) =
         mutate(saveDelayMs = 1_000) { library ->
             library.copy(books = library.books.map {
@@ -88,14 +96,34 @@ class LibraryRepository(context: Context) {
             })
         }
 
-    fun addReadingTime(id: String, ms: Long) {
+    /** @param percent where in the book it was read, see [percentOf]; null if that isn't known. */
+    fun addReadingTime(id: String, ms: Long, percent: Int?) {
         if (ms <= 0) return
         mutate(saveDelayMs = 1_000) { library ->
             library.copy(books = library.books.map {
-                if (it.id == id) it.copy(readingTimeMs = it.readingTimeMs + ms) else it
+                if (it.id != id) return@map it
+                it.copy(
+                    readingTimeMs = it.readingTimeMs + ms,
+                    timeByPercent = if (percent == null) it.timeByPercent else it.timeByPercent.plusTime(percent, ms),
+                )
             })
         }
     }
+
+    fun setWordCount(id: String, count: Int) = mutate { library ->
+        library.copy(books = library.books.map { if (it.id == id) it.copy(wordCount = count) else it })
+    }
+
+    fun setFingerprint(id: String, fingerprint: String) = mutate { library ->
+        library.copy(books = library.books.map { if (it.id == id) it.copy(fingerprint = fingerprint) else it })
+    }
+
+    fun updateSelectionHistory(id: String, history: List<BookRange>) =
+        mutate(saveDelayMs = 1_000) { library ->
+            library.copy(books = library.books.map {
+                if (it.id == id) it.copy(selectionHistory = history) else it
+            })
+        }
 
     private fun mutate(saveDelayMs: Long = 0, transform: (Library) -> Library) {
         val current = _library.value ?: return
@@ -168,8 +196,15 @@ class LibraryRepository(context: Context) {
         .put("addedAt", addedAt)
         .put("paragraph", position.paragraph)
         .put("offset", position.offset)
+        .put("zoom", position.zoom.toDouble())
+        .put("pan", position.pan)
         .put("progress", progress.toDouble())
         .put("readingTime", readingTimeMs)
+        .apply { if (timeByPercent.isNotEmpty()) put("timeByPercent", JSONArray(timeByPercent)) }
+        .apply { if (wordCount != null) put("words", wordCount) }
+        .put("selectionHistory", JSONArray(selectionHistory.toInts()))
+        .apply { if (favorite) put("favorite", true) }
+        .apply { if (fingerprint != null) put("fingerprint", fingerprint) }
 
     private fun JSONObject.toBook() = Book(
         id = getString("id"),
@@ -179,9 +214,18 @@ class LibraryRepository(context: Context) {
         title = getString("title"),
         author = optString("author").ifEmpty { null },
         addedAt = getLong("addedAt"),
-        position = ReadingPosition(optInt("paragraph"), optInt("offset")),
+        position = ReadingPosition(optInt("paragraph"), optInt("offset"), optDouble("zoom", 1.0).toFloat(), optInt("pan")),
         progress = optDouble("progress", 0.0).toFloat(),
         readingTimeMs = optLong("readingTime"),
+        timeByPercent = optJSONArray("timeByPercent")
+            ?.let { array -> List(PERCENTS) { array.optLong(it).coerceAtLeast(0) } }
+            .orEmpty(),
+        wordCount = if (has("words")) optInt("words").coerceAtLeast(0) else null,
+        selectionHistory = optJSONArray("selectionHistory")
+            ?.let { array -> rangesFromInts((0 until array.length()).map { array.optInt(it, -1) }) }
+            .orEmpty(),
+        favorite = optBoolean("favorite"),
+        fingerprint = optString("fingerprint").ifEmpty { null },
     )
 
     private companion object {

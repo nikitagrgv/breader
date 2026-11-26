@@ -3,7 +3,7 @@ package ru.nikitagrgv.breader.format
 data class BookMetadata(val title: String?, val author: String?)
 
 /** Parsed text of a book. Not a data class on purpose: comparing thousands of paragraphs is pointless. */
-class BookContent(
+open class BookContent(
     val metadata: BookMetadata,
     val paragraphs: List<Paragraph>,
 )

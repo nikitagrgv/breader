@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
@@ -36,17 +37,23 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ru.nikitagrgv.breader.R
 import ru.nikitagrgv.breader.data.Favorite
+import ru.nikitagrgv.breader.data.FavoriteKind
 
 /**
- * The favorite words with their meanings. A tap shows a word in detail; a long press starts selecting them,
- * e.g. to remove several at once.
+ * The favorite words and phrases with their meanings and translations. A tap shows one in detail; a long press starts
+ * selecting them, e.g. to remove several at once.
+ * @param onGoToPlace shows where in the book a favorite was selected.
+ * @param onRemove gets the [Favorite.key]s.
+ * @param onLookUp opens the dictionaries to look up a word the user types.
  */
 @Composable
 fun FavoritesScreen(
     favorites: List<Favorite>,
     contentPadding: PaddingValues,
     onOpen: (Favorite) -> Unit,
+    onGoToPlace: (Favorite) -> Unit,
     onRemove: (Set<String>) -> Unit,
+    onLookUp: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // Keys of the selected favorites; a list, as a set isn't saveable as is.
@@ -87,11 +94,18 @@ fun FavoritesScreen(
                 }
             }
         } else {
-            Text(
-                text = stringResource(R.string.favorites_title),
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            )
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 16.dp, end = 4.dp)) {
+                Text(
+                    text = stringResource(R.string.favorites_title),
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(vertical = 12.dp),
+                )
+                IconButton(onClick = onLookUp) {
+                    Icon(painterResource(R.drawable.ic_search), contentDescription = stringResource(R.string.look_up_word))
+                }
+            }
         }
 
         if (favorites.isEmpty()) {
@@ -108,12 +122,38 @@ fun FavoritesScreen(
                 items(favorites, key = { it.key }) { favorite ->
                     val checked = favorite.key in selection
                     ListItem(
-                        headlineContent = { Text(favorite.word) },
-                        supportingContent = { Text(favorite.brief, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+                        headlineContent = { Text(favorite.word, maxLines = 3, overflow = TextOverflow.Ellipsis) },
+                        supportingContent = {
+                            // What it's kept with, in the order of the brief.
+                            Row {
+                                for (kind in listOf(FavoriteKind.AI, FavoriteKind.DICTIONARY, FavoriteKind.MACHINE)) {
+                                    if (kind !in favorite.kinds) continue
+                                    Icon(
+                                        painterResource(kind.icon),
+                                        contentDescription = stringResource(kind.label),
+                                        modifier = Modifier
+                                            .padding(top = 2.dp, end = 6.dp)
+                                            .size(16.dp),
+                                    )
+                                }
+                                Text(
+                                    text = favorite.brief.ifEmpty { stringResource(R.string.favorite_no_translation) },
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        },
                         leadingContent = if (selecting) {
                             { Checkbox(checked = checked, onCheckedChange = null) }
                         } else {
                             null
+                        },
+                        trailingContent = favorite.place?.takeUnless { selecting }?.let {
+                            {
+                                IconButton(onClick = { onGoToPlace(favorite) }) {
+                                    Icon(painterResource(R.drawable.ic_book), contentDescription = stringResource(R.string.favorite_go_to_place))
+                                }
+                            }
                         },
                         colors = if (checked) {
                             ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
@@ -149,17 +189,20 @@ fun FavoritesScreen(
     }
 }
 
-/** @param word the one to remove, if it's one; otherwise [count] is shown. */
+/**
+ * @param word the text to remove, if it's one; otherwise [count] is shown.
+ * @param kind what to remove from the favorite with the [word], if not the whole of it.
+ */
 @Composable
-fun RemoveFavoritesDialog(word: String?, count: Int, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+fun RemoveFavoritesDialog(word: String?, count: Int, onConfirm: () -> Unit, onDismiss: () -> Unit, kind: FavoriteKind? = null) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                if (word != null) {
-                    stringResource(R.string.favorite_remove_title, word)
-                } else {
-                    pluralStringResource(R.plurals.favorites_remove_title, count, count)
+                when {
+                    word != null && kind != null -> stringResource(R.string.favorite_remove_kind_title, word, stringResource(kind.label))
+                    word != null -> stringResource(R.string.favorite_remove_title, word)
+                    else -> pluralStringResource(R.plurals.favorites_remove_title, count, count)
                 },
             )
         },

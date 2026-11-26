@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.AP
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -24,6 +25,7 @@ import ru.nikitagrgv.breader.data.AppSettings
 import ru.nikitagrgv.breader.data.AppTheme
 import ru.nikitagrgv.breader.data.Book
 import ru.nikitagrgv.breader.data.BookFiles
+import ru.nikitagrgv.breader.data.DictionarySettings
 import ru.nikitagrgv.breader.data.Library
 import ru.nikitagrgv.breader.data.LibraryRepository
 import ru.nikitagrgv.breader.data.ReaderFont
@@ -31,13 +33,24 @@ import ru.nikitagrgv.breader.data.ReadingPosition
 import ru.nikitagrgv.breader.data.SeekBarPosition
 import ru.nikitagrgv.breader.data.SettingsRepository
 import ru.nikitagrgv.breader.data.TranslationSettings
+import ru.nikitagrgv.breader.format.BookContent
+import ru.nikitagrgv.breader.format.BookFormat
+import ru.nikitagrgv.breader.format.BookWords
+import ru.nikitagrgv.breader.format.PdfBook
+import ru.nikitagrgv.breader.format.countWords
+import ru.nikitagrgv.breader.translation.BookRange
 import ru.nikitagrgv.breader.ui.reader.ReaderState
+import ru.nikitagrgv.breader.ui.reader.SelectionHistoryState
 import ru.nikitagrgv.breader.ui.reader.bookId
+import java.io.Closeable
 
 sealed interface LibraryEvent {
     data class ImportFinished(val failed: List<String>, val duplicates: List<String>) : LibraryEvent
     data class BookRemoved(val book: Book, val index: Int) : LibraryEvent
 }
+
+/** A place in a book to show once the book is open in the reader, see [MainViewModel.jumpTo]. */
+data class ReaderJump(val bookId: String, val range: BookRange)
 
 class MainViewModel(
     private val repository: LibraryRepository,
@@ -51,19 +64,30 @@ class MainViewModel(
     val settings: StateFlow<AppSettings?> =
         settingsRepository.settings.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    private val _reader = MutableStateFlow<ReaderState>(ReaderState.Empty)
+    private val _reader = MutableStateFlow<ReaderState>(ReaderState.Starting)
     val reader: StateFlow<ReaderState> = _reader.asStateFlow()
 
     private val _events = Channel<LibraryEvent>(Channel.BUFFERED)
     val events: Flow<LibraryEvent> = _events.receiveAsFlow()
 
+    private val _jump = MutableStateFlow<ReaderJump?>(null)
+
+    /** The place the reader is to show, once it has the book open; null when there's none. */
+    val jump: StateFlow<ReaderJump?> = _jump.asStateFlow()
+
     private var loadJob: Job? = null
+
+    /** Counts the words of the open PDF, whose pages are read one by one. */
+    private var pdfWordsJob: Job? = null
 
     init {
         // Reopen the book that was being read last time.
         viewModelScope.launch {
             val library = repository.awaitLibrary()
-            library.books.find { it.id == library.currentBookId }?.let(::load)
+            val book = library.books.find { it.id == library.currentBookId }
+            if (book != null) load(book) else setReader(ReaderState.Empty)
+            countMissingWords(library.books)
+            fingerprintMissing(library.books)
         }
     }
 
@@ -88,6 +112,8 @@ class MainViewModel(
                 }
             }
             repository.addBooks(added)
+            countMissingWords(added)
+            fingerprintMissing(added)
             if (failed.isNotEmpty() || duplicates.isNotEmpty()) {
                 _events.send(LibraryEvent.ImportFinished(failed, duplicates))
             }
@@ -101,21 +127,36 @@ class MainViewModel(
         load(book)
     }
 
+    /** Opens [book] in the reader, unless it's open already, and shows the [range] of it there, selected. */
+    fun jumpTo(book: Book, range: BookRange) {
+        openBook(book)
+        _jump.value = ReaderJump(book.id, range)
+    }
+
+    fun onJumpDone() {
+        _jump.value = null
+    }
+
     fun removeBook(book: Book) {
         val (index, removed) = repository.removeBook(book.id) ?: return
         if (_reader.value.bookId == book.id) {
             loadJob?.cancel()
-            _reader.value = ReaderState.Empty
+            setReader(ReaderState.Empty)
         }
         _events.trySend(LibraryEvent.BookRemoved(removed, index))
     }
 
     fun undoRemove(event: LibraryEvent.BookRemoved) = repository.insertBook(event.book, event.index)
 
+    fun setFavorite(book: Book, favorite: Boolean) = repository.setFavorite(book.id, favorite)
+
+    /** See [LibraryRepository.reorderBooks]. */
+    fun reorderBooks(ids: List<String>) = repository.reorderBooks(ids)
+
     fun savePosition(bookId: String, position: ReadingPosition, progress: Float) =
         repository.updatePosition(bookId, position, progress)
 
-    fun addReadingTime(bookId: String, ms: Long) = repository.addReadingTime(bookId, ms)
+    fun addReadingTime(bookId: String, ms: Long, percent: Int?) = repository.addReadingTime(bookId, ms, percent)
 
     fun setTheme(theme: AppTheme) {
         viewModelScope.launch { settingsRepository.setTheme(theme) }
@@ -149,34 +190,139 @@ class MainViewModel(
         viewModelScope.launch { settingsRepository.setMoreSelectionActions(open) }
     }
 
+    fun setSelectionFade(ms: Int) {
+        viewModelScope.launch { settingsRepository.setSelectionFade(ms) }
+    }
+
+    fun setSelectionHistorySize(size: Int) {
+        viewModelScope.launch { settingsRepository.setSelectionHistorySize(size) }
+    }
+
     fun setSeekBarPosition(position: SeekBarPosition) {
         viewModelScope.launch { settingsRepository.setSeekBarPosition(position) }
+    }
+
+    fun setHideCommonWords(hide: Boolean) {
+        viewModelScope.launch { settingsRepository.setHideCommonWords(hide) }
     }
 
     fun updateTranslationSettings(transform: (TranslationSettings) -> TranslationSettings) {
         viewModelScope.launch { settingsRepository.updateTranslation(transform) }
     }
 
+    fun updateDictionarySettings(transform: (DictionarySettings) -> DictionarySettings) {
+        viewModelScope.launch { settingsRepository.updateDictionaries(transform) }
+    }
+
+    override fun onCleared() {
+        closeContent(_reader.value)
+    }
+
     private fun load(book: Book) {
         loadJob?.cancel()
-        _reader.value = ReaderState.Loading(book.id, book.title)
+        setReader(ReaderState.Loading(book.id, book.title))
         loadJob = viewModelScope.launch {
-            val content = withContext(Dispatchers.IO) {
-                try {
-                    files.readContent(book)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to open ${book.uri}", e)
-                    null
+            var content: BookContent? = null
+            var words: BookWords? = null
+            try {
+                withContext(Dispatchers.IO) {
+                    try {
+                        val read = files.readContent(book)
+                        content = read
+                        // A PDF's pages are read as they're shown; its words are counted later.
+                        if (read !is PdfBook) words = BookWords.of(read.paragraphs)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to open ${book.uri}", e)
+                    }
+                }
+            } catch (e: CancellationException) {
+                // Another book was opened in the meantime, and nobody else knows about this one.
+                (content as? Closeable)?.close()
+                throw e
+            }
+            // The passed book may be stale by now, take what was saved last.
+            val latest = library.value?.books?.find { it.id == book.id } ?: book
+            val history = SelectionHistoryState(latest.selectionHistory) { repository.updateSelectionHistory(book.id, it) }
+            setReader(
+                content?.let { ReaderState.Ready(book.id, book.title, it, latest.position, history, words) }
+                    ?: ReaderState.Failed(book.id, book.title),
+            )
+            words?.let { if (it.total != latest.wordCount) repository.setWordCount(book.id, it.total) }
+            (content as? PdfBook)?.let { if (latest.wordCount == null) countPdfWords(book.id, it) }
+        }
+    }
+
+    /**
+     * Counts the words of a PDF page by page, in the background: reading all of its pages takes a few seconds. The pages
+     * read are kept, so searching the book afterwards is quick. Stopped when the PDF is closed.
+     */
+    private fun countPdfWords(bookId: String, book: PdfBook) {
+        pdfWordsJob?.cancel()
+        pdfWordsJob = viewModelScope.launch {
+            var total = 0
+            for (page in book.pageSizes.indices) {
+                // A page that can't be read counts as one without text, like a scan.
+                val text = book.pageText(page) ?: continue
+                total += withContext(Dispatchers.Default) { countWords(text) }
+            }
+            repository.setWordCount(bookId, total)
+        }
+    }
+
+    /**
+     * Counts the words of the [books] that aren't counted yet, one at a time in the background, so that the library
+     * shows them without opening each book. PDFs are left until they're opened: PDFium can only read one at a time.
+     */
+    private fun countMissingWords(books: List<Book>) {
+        val uncounted = books.filter { it.wordCount == null && it.format != BookFormat.PDF }
+        if (uncounted.isEmpty()) return
+        viewModelScope.launch {
+            for (book in uncounted) {
+                val count = withContext(Dispatchers.IO) {
+                    try {
+                        BookWords.of(files.readContent(book).paragraphs).total
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to count the words of ${book.uri}", e)
+                        null
+                    }
+                }
+                // Removed in the meantime, or counted by being opened.
+                if (count != null && library.value?.books?.find { it.id == book.id }?.wordCount == null) {
+                    repository.setWordCount(book.id, count)
                 }
             }
-            // The passed book may be stale by now, take the latest saved position.
-            val position = library.value?.books?.find { it.id == book.id }?.position ?: book.position
-            _reader.value = if (content != null) {
-                ReaderState.Ready(book.id, book.title, content, position)
-            } else {
-                ReaderState.Failed(book.id, book.title)
+        }
+    }
+
+    /** Takes the fingerprints of the [books] that have none yet, one at a time in the background: see [Book.fingerprint]. */
+    private fun fingerprintMissing(books: List<Book>) {
+        val missing = books.filter { it.fingerprint == null }
+        if (missing.isEmpty()) return
+        viewModelScope.launch {
+            for (book in missing) {
+                val fingerprint = withContext(Dispatchers.IO) {
+                    try {
+                        files.fingerprint(book.uri)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to take the fingerprint of ${book.uri}", e)
+                        null
+                    }
+                }
+                if (fingerprint != null) repository.setFingerprint(book.id, fingerprint)
             }
         }
+    }
+
+    private fun setReader(state: ReaderState) {
+        val previous = _reader.value
+        if ((previous as? ReaderState.Ready)?.content !== (state as? ReaderState.Ready)?.content) pdfWordsJob?.cancel()
+        _reader.value = state
+        closeContent(previous)
+    }
+
+    /** A PDF stays open while it's read. */
+    private fun closeContent(state: ReaderState) {
+        ((state as? ReaderState.Ready)?.content as? Closeable)?.close()
     }
 
     companion object {

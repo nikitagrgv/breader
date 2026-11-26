@@ -44,9 +44,13 @@ import ru.nikitagrgv.breader.data.AppTheme
 import ru.nikitagrgv.breader.data.ReaderFont
 import ru.nikitagrgv.breader.data.SeekBarPosition
 import ru.nikitagrgv.breader.data.TranslationSettings
+import ru.nikitagrgv.breader.dictionary.DictionarySource
+import ru.nikitagrgv.breader.translation.MachineTranslationService
+import ru.nikitagrgv.breader.ui.dictionary.dictionaryTitle
 import ru.nikitagrgv.breader.ui.reader.ReaderTextPreview
 import ru.nikitagrgv.breader.ui.reader.fontFamily
 import ru.nikitagrgv.breader.ui.reader.toReaderSettings
+import ru.nikitagrgv.breader.ui.translation.title
 import kotlin.math.roundToInt
 
 private val THEMES = listOf(
@@ -83,10 +87,12 @@ fun SettingsScreen(
     onJustifyChange: (Boolean) -> Unit,
     onHyphenationChange: (Boolean) -> Unit,
     onSeekBarPositionChange: (SeekBarPosition) -> Unit,
+    onSelectionFadeChange: (Int) -> Unit,
+    onSelectionHistorySizeChange: (Int) -> Unit,
     onTranslationChange: ((TranslationSettings) -> TranslationSettings) -> Unit,
     cachedTranslations: Int,
     onClearTranslationCache: () -> Unit,
-    dictionaries: Int,
+    dictionariesInUse: List<DictionarySource>,
     onOpenDictionaries: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -94,6 +100,8 @@ fun SettingsScreen(
     var fontSize by remember(settings.fontSize) { mutableFloatStateOf(settings.fontSize) }
     var lineSpacing by remember(settings.lineSpacing) { mutableFloatStateOf(settings.lineSpacing) }
     var margins by remember(settings.margins) { mutableFloatStateOf(settings.margins.toFloat()) }
+    var selectionFade by remember(settings.selectionFadeMs) { mutableFloatStateOf(settings.selectionFadeMs.toFloat()) }
+    var selectionHistorySize by remember(settings.selectionHistorySize) { mutableFloatStateOf(settings.selectionHistorySize.toFloat()) }
 
     Column(
         modifier
@@ -228,18 +236,68 @@ fun SettingsScreen(
             }
         }
 
+        SectionHeader(R.string.settings_selection)
+        SliderSetting(
+            title = R.string.selection_fade,
+            summary = R.string.selection_fade_summary,
+            value = if (selectionFade.roundToInt() == 0) {
+                stringResource(R.string.selection_fade_off)
+            } else {
+                stringResource(R.string.selection_fade_value, selectionFade / 1000)
+            },
+            position = selectionFade,
+            onPositionChange = { selectionFade = it },
+            onPositionChangeFinished = { onSelectionFadeChange(selectionFade.roundToInt()) },
+            range = 0f..AppSettings.MAX_SELECTION_FADE_MS.toFloat(),
+            steps = AppSettings.MAX_SELECTION_FADE_MS / AppSettings.SELECTION_FADE_STEP_MS - 1,
+        )
+        SliderSetting(
+            title = R.string.selection_history_size,
+            summary = R.string.selection_history_size_summary,
+            value = selectionHistorySize.roundToInt().let {
+                if (it == 0) stringResource(R.string.selection_history_off) else pluralStringResource(R.plurals.selection_history_size_value, it, it)
+            },
+            position = selectionHistorySize,
+            onPositionChange = { selectionHistorySize = it },
+            onPositionChangeFinished = { onSelectionHistorySizeChange(selectionHistorySize.roundToInt()) },
+            range = 0f..AppSettings.MAX_SELECTION_HISTORY_SIZE.toFloat(),
+            steps = AppSettings.MAX_SELECTION_HISTORY_SIZE / AppSettings.SELECTION_HISTORY_SIZE_STEP - 1,
+        )
+
         SectionHeader(R.string.settings_translation)
         TranslationSection(settings.translation, onTranslationChange, cachedTranslations, onClearTranslationCache)
+
+        SectionHeader(R.string.settings_machine_translation)
+        Text(
+            text = stringResource(R.string.machine_translation_summary),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        )
+        SingleChoiceSegmentedButtonRow(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+        ) {
+            MachineTranslationService.entries.forEachIndexed { index, service ->
+                SegmentedButton(
+                    selected = settings.translation.machineService == service,
+                    onClick = { onTranslationChange { it.copy(machineService = service) } },
+                    shape = SegmentedButtonDefaults.itemShape(index, MachineTranslationService.entries.size),
+                    label = { Text(stringResource(service.title)) },
+                )
+            }
+        }
 
         SectionHeader(R.string.dictionaries_title)
         ListItem(
             headlineContent = { Text(stringResource(R.string.manage_dictionaries)) },
             supportingContent = {
                 Text(
-                    if (dictionaries == 0) {
+                    if (dictionariesInUse.isEmpty()) {
                         stringResource(R.string.dictionaries_summary_none)
                     } else {
-                        pluralStringResource(R.plurals.dictionaries_summary, dictionaries, dictionaries)
+                        stringResource(R.string.dictionaries_summary, dictionariesInUse.map { dictionaryTitle(it) }.joinToString())
                     },
                 )
             },

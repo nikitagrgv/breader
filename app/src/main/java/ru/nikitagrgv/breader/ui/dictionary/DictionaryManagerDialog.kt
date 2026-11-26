@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -27,10 +29,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -41,32 +45,53 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ru.nikitagrgv.breader.R
+import ru.nikitagrgv.breader.data.DictionarySettings
 import ru.nikitagrgv.breader.dictionary.CatalogLanguage
 import ru.nikitagrgv.breader.dictionary.DictionaryInfo
+import ru.nikitagrgv.breader.dictionary.DictionarySource
 import ru.nikitagrgv.breader.dictionary.Download
 import ru.nikitagrgv.breader.dictionary.DownloadError
 import ru.nikitagrgv.breader.dictionary.DownloadState
 import ru.nikitagrgv.breader.dictionary.Edition
 import ru.nikitagrgv.breader.dictionary.Kaikki
+import ru.nikitagrgv.breader.dictionary.OnlineDictionary
+import ru.nikitagrgv.breader.dictionary.all
 import ru.nikitagrgv.breader.dictionary.dictionaryId
+import ru.nikitagrgv.breader.ui.KeepListPlace
+import ru.nikitagrgv.breader.ui.ReorderableItem
+import ru.nikitagrgv.breader.ui.reorderableItem
+import ru.nikitagrgv.breader.ui.rememberReorderState
+import ru.nikitagrgv.breader.ui.settings.htmlString
 import java.text.NumberFormat
 
 /**
- * A full-screen list of the downloaded dictionaries and of the ones to download.
+ * A full-screen list of the dictionaries, the downloaded ones and the online ones, to turn them on and off and to set
+ * the order of their results, and of the dictionaries to download.
  * @param defaultEdition the edition whose languages are listed first.
+ * @param onSettingsChange gets a function that makes the new settings out of the stored ones.
  */
 @Composable
-fun DictionaryManagerDialog(defaultEdition: Edition, viewModel: DictionaryViewModel, onDismiss: () -> Unit) {
+fun DictionaryManagerDialog(
+    defaultEdition: Edition,
+    viewModel: DictionaryViewModel,
+    settings: DictionarySettings,
+    onSettingsChange: ((DictionarySettings) -> DictionarySettings) -> Unit,
+    onDismiss: () -> Unit,
+) {
     var editionCode by rememberSaveable { mutableStateOf(defaultEdition.code) }
     val edition = Kaikki.editions.find { it.code == editionCode } ?: defaultEdition
     var query by rememberSaveable { mutableStateOf("") }
@@ -76,6 +101,15 @@ fun DictionaryManagerDialog(defaultEdition: Edition, viewModel: DictionaryViewMo
     LaunchedEffect(edition) { viewModel.loadLanguages(edition) }
     val languageList = languageLists[edition.code]
     val installedIds = remember(installed) { installed.mapTo(HashSet()) { it.id } }
+    // The field keeps its own text: the stored one comes back a moment later and would move the cursor.
+    var yandexKey by remember { mutableStateOf(settings.yandexKey) }
+
+    val dictionaries = remember(installed, settings.order) { settings.all(installed) }
+    val byKey = remember(dictionaries) { dictionaries.associateBy { it.orderKey } }
+    val storedOrder = remember(dictionaries) { dictionaries.map { it.orderKey } }
+    val reorder = rememberReorderState(storedOrder) { keys -> onSettingsChange { it.copy(order = keys) } }
+    val listState = rememberLazyListState()
+    KeepListPlace(listState, reorder.order)
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxSize()) {
@@ -91,26 +125,59 @@ fun DictionaryManagerDialog(defaultEdition: Edition, viewModel: DictionaryViewMo
                     )
                 }
 
-                LazyColumn(Modifier.fillMaxSize()) {
-                    // Downloads of dictionaries that aren't installed yet go along with the installed ones.
+                LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                    item { SectionHeader(R.string.dictionaries_yours) }
+                    item {
+                        Text(
+                            text = stringResource(R.string.dictionaries_yours_summary),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                        )
+                    }
+                    items(reorder.order, key = { it }) { key ->
+                        val source = byKey[key] ?: return@items
+                        val item = reorderableItem(reorder, key)
+                        when (source) {
+                            is DictionarySource.Downloaded -> DownloadedItem(
+                                dictionary = source.info,
+                                enabled = source.info.id !in settings.disabled,
+                                onEnabledChange = { on ->
+                                    val id = source.info.id
+                                    onSettingsChange { it.copy(disabled = if (on) it.disabled - id else it.disabled + id) }
+                                },
+                                download = downloads[source.info.id],
+                                onRemove = {
+                                    viewModel.remove(source.info.id)
+                                    onSettingsChange { it.forget(source.info.id) }
+                                },
+                                onCancel = { viewModel.cancel(source.info.id) },
+                                item = item,
+                            )
+                            is DictionarySource.Online -> OnlineItem(
+                                dictionary = source.dictionary,
+                                enabled = source.dictionary in settings.online,
+                                onEnabledChange = { on ->
+                                    val dictionary = source.dictionary
+                                    onSettingsChange { it.copy(online = if (on) it.online + dictionary else it.online - dictionary) }
+                                },
+                                yandexKey = yandexKey,
+                                onYandexKeyChange = { value ->
+                                    yandexKey = value
+                                    onSettingsChange { it.copy(yandexKey = value) }
+                                },
+                                item = item,
+                            )
+                        }
+                    }
+                    // Downloads of dictionaries that aren't installed yet go after the installed ones.
                     val pending = downloads.filterKeys { it !in installedIds }
-                    if (installed.isNotEmpty() || pending.isNotEmpty()) {
-                        item { SectionHeader(R.string.dictionaries_downloaded) }
-                        items(installed, key = { it.id }) { dictionary ->
-                            InstalledItem(
-                                dictionary = dictionary,
-                                download = downloads[dictionary.id],
-                                onRemove = { viewModel.remove(dictionary.id) },
-                                onCancel = { viewModel.cancel(dictionary.id) },
-                            )
-                        }
-                        items(pending.entries.toList(), key = { it.key }) { (id, download) ->
-                            PendingItem(
-                                download = download,
-                                onRetry = { viewModel.download(download.edition, download.language) },
-                                onCancel = { viewModel.cancel(id) },
-                            )
-                        }
+                    items(pending.entries.toList(), key = { it.key }) { (id, download) ->
+                        PendingItem(
+                            download = download,
+                            onRetry = { viewModel.download(download.edition, download.language) },
+                            onCancel = { viewModel.cancel(id) },
+                        )
                     }
 
                     item { SectionHeader(R.string.dictionaries_available) }
@@ -164,6 +231,57 @@ fun DictionaryManagerDialog(defaultEdition: Edition, viewModel: DictionaryViewMo
     }
 }
 
+@Composable
+private fun OnlineItem(
+    dictionary: OnlineDictionary,
+    enabled: Boolean,
+    onEnabledChange: (Boolean) -> Unit,
+    yandexKey: String,
+    onYandexKeyChange: (String) -> Unit,
+    item: ReorderableItem,
+) {
+    Surface(color = itemColor(item.dragged), modifier = item.modifier) {
+        Column {
+            ListItem(
+                headlineContent = { Text(stringResource(dictionary.title)) },
+                overlineContent = { Text(stringResource(R.string.dictionaries_online)) },
+                supportingContent = { Text(stringResource(dictionary.summary)) },
+                leadingContent = item.handle,
+                trailingContent = { Switch(checked = enabled, onCheckedChange = null) },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                modifier = Modifier
+                    .toggleable(value = enabled, role = Role.Switch, onValueChange = onEnabledChange)
+                    .semantics { customActions = item.actions },
+            )
+            if (dictionary == OnlineDictionary.YANDEX && enabled) {
+                OutlinedTextField(
+                    value = yandexKey,
+                    onValueChange = onYandexKeyChange,
+                    label = { Text(stringResource(R.string.yandex_key)) },
+                    supportingText = { Text(htmlString(R.string.yandex_key_hint)) },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                )
+            }
+        }
+    }
+}
+
+/** Lifted off the list while it's dragged. */
+@Composable
+private fun itemColor(dragged: Boolean): Color =
+    if (dragged) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surface
+
+@get:StringRes
+private val OnlineDictionary.summary: Int
+    get() = when (this) {
+        OnlineDictionary.YANDEX -> R.string.online_yandex_summary
+        OnlineDictionary.GOOGLE -> R.string.online_google_summary
+        OnlineDictionary.WIKTIONARY -> R.string.online_wiktionary_summary
+    }
+
 private fun LazyListScope.languageItems(
     list: LanguageList?,
     query: String,
@@ -214,35 +332,55 @@ private fun LazyListScope.languageItems(
     }
 }
 
+/** @param download of the dictionary again, which replaces it once it's done. */
 @Composable
-private fun InstalledItem(dictionary: DictionaryInfo, download: Download?, onRemove: () -> Unit, onCancel: () -> Unit) {
+private fun DownloadedItem(
+    dictionary: DictionaryInfo,
+    enabled: Boolean,
+    onEnabledChange: (Boolean) -> Unit,
+    download: Download?,
+    onRemove: () -> Unit,
+    onCancel: () -> Unit,
+    item: ReorderableItem,
+) {
     val context = LocalContext.current
-    ListItem(
-        headlineContent = { Text(dictionary.name) },
-        supportingContent = {
-            if (download != null) {
-                DownloadProgress(download.state)
-            } else {
-                Text(
-                    stringResource(
-                        R.string.dictionary_info,
-                        dictionary.edition.name,
-                        pluralStringResource(R.plurals.dictionary_words, dictionary.entries, formatNumber(dictionary.entries)),
-                        Formatter.formatShortFileSize(context, dictionary.sizeBytes),
-                    ),
-                )
-            }
-        },
-        trailingContent = {
-            if (download != null) {
-                CancelButton(onCancel)
-            } else {
-                IconButton(onClick = onRemove) {
-                    Icon(painterResource(R.drawable.ic_delete), contentDescription = stringResource(R.string.dictionary_remove))
+    Surface(color = itemColor(item.dragged), modifier = item.modifier) {
+        ListItem(
+            headlineContent = { Text(dictionary.name) },
+            overlineContent = { Text(stringResource(R.string.dictionaries_downloaded)) },
+            supportingContent = {
+                if (download != null) {
+                    DownloadProgress(download.state)
+                } else {
+                    Text(
+                        stringResource(
+                            R.string.dictionary_info,
+                            dictionary.edition.name,
+                            pluralStringResource(R.plurals.dictionary_words, dictionary.entries, formatNumber(dictionary.entries)),
+                            Formatter.formatShortFileSize(context, dictionary.sizeBytes),
+                        ),
+                    )
                 }
-            }
-        },
-    )
+            },
+            leadingContent = item.handle,
+            trailingContent = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (download != null) {
+                        CancelButton(onCancel)
+                    } else {
+                        IconButton(onClick = onRemove) {
+                            Icon(painterResource(R.drawable.ic_delete), contentDescription = stringResource(R.string.dictionary_remove))
+                        }
+                    }
+                    Switch(checked = enabled, onCheckedChange = null)
+                }
+            },
+            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+            modifier = Modifier
+                .toggleable(value = enabled, role = Role.Switch, onValueChange = onEnabledChange)
+                .semantics { customActions = item.actions },
+        )
+    }
 }
 
 @Composable

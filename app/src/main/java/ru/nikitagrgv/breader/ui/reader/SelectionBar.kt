@@ -49,22 +49,24 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import ru.nikitagrgv.breader.R
+import ru.nikitagrgv.breader.data.FavoriteKind
+import ru.nikitagrgv.breader.ui.favorites.FavoriteButton
+import ru.nikitagrgv.breader.ui.moreOptionsMark
 
 /**
  * Actions for the selected text, shown at the bottom instead of the floating text toolbar. The main ones are
  * always there; the rest are in an extra row above them, opened by the arrow. There's no button to clear the
  * selection: a tap on the text does it.
  * @param moreOpen whether the extra row is open.
- * @param favorite whether the selected word is a favorite.
+ * @param onMachineTranslate translates by a free service, apart from the models: it doesn't get the context.
+ * @param favoriteKinds what the selected text is kept with in the favorites; null if it isn't kept.
+ * @param savingFavorite whether it's being added to them.
  */
 @Composable
 fun SelectionBar(
@@ -75,10 +77,13 @@ fun SelectionBar(
     onLookUp: () -> Unit,
     onTranslate: () -> Unit,
     onQuickTranslate: () -> Unit,
+    onMachineTranslate: () -> Unit,
     autoTranslate: Boolean,
     onAutoTranslateChange: (Boolean) -> Unit,
-    favorite: Boolean,
+    favoriteKinds: Set<FavoriteKind>?,
+    savingFavorite: Boolean,
     onFavorite: () -> Unit,
+    onFavoriteKind: (FavoriteKind) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = modifier.fillMaxWidth()) {
@@ -100,11 +105,16 @@ fun SelectionBar(
                         contentDescription = stringResource(if (moreOpen) R.string.fewer_actions else R.string.more_actions),
                     )
                 }
-                SelectionAction(
-                    icon = if (favorite) R.drawable.ic_star else R.drawable.ic_star_outline,
-                    label = if (favorite) R.string.remove_from_favorites else R.string.add_to_favorites,
+                // A long press opens the kinds to keep it as, so there's no tooltip.
+                FavoriteButton(
+                    kinds = favoriteKinds,
+                    saving = savingFavorite,
                     onClick = onFavorite,
-                    tint = if (favorite) MaterialTheme.colorScheme.primary else Color.Unspecified,
+                    onKindClick = onFavoriteKind,
+                    iconSize = 28.dp,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(56.dp),
                 )
                 TranslateButtons(
                     onTranslate = onTranslate,
@@ -113,6 +123,7 @@ fun SelectionBar(
                     onAutoTranslateChange = onAutoTranslateChange,
                     modifier = Modifier.weight(1.6f),
                 )
+                SelectionAction(R.drawable.ic_language, R.string.machine_translation, onMachineTranslate)
                 SelectionAction(R.drawable.ic_dictionary, R.string.dictionary, onLookUp)
             }
         }
@@ -200,24 +211,12 @@ private fun TranslateButtons(
                             onClick = onQuickTranslate,
                         ),
                 ) {
-                    val markColor = LocalContentColor.current
                     Icon(
                         painterResource(R.drawable.ic_bolt),
                         contentDescription = stringResource(R.string.quick_translation),
                         modifier = Modifier
                             .size(26.dp)
-                            .drawWithContent {
-                                drawContent()
-                                val leg = 5.dp.toPx()
-                                val corner = Offset(size.width + 3.dp.toPx(), size.height + 3.dp.toPx())
-                                val mark = Path().apply {
-                                    moveTo(corner.x, corner.y)
-                                    lineTo(corner.x, corner.y - leg)
-                                    lineTo(corner.x - leg, corner.y)
-                                    close()
-                                }
-                                drawPath(mark, markColor)
-                            },
+                            .moreOptionsMark(LocalContentColor.current),
                     )
                 }
             }

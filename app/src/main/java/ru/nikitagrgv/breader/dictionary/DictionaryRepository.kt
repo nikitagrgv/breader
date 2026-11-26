@@ -18,6 +18,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import ru.nikitagrgv.breader.data.DictionarySettings
+import ru.nikitagrgv.breader.data.downloadedOrderKey
+import ru.nikitagrgv.breader.data.orderKey
 import ru.nikitagrgv.breader.translation.abortOnCancel
 import java.io.File
 import java.io.FilterInputStream
@@ -41,15 +44,44 @@ data class DictionaryInfo(
     val created: Long,
 )
 
-/** The entries one dictionary has for a looked up text. */
-data class DictionaryResult(val dictionary: DictionaryInfo, val entries: List<DictionaryEntry>)
+/** A dictionary: where a [DictionaryResult] comes from. */
+sealed interface DictionarySource {
+    data class Downloaded(val info: DictionaryInfo) : DictionarySource
+    data class Online(val dictionary: OnlineDictionary) : DictionarySource
 
-/** All the meanings in one line, as a brief translation; null if there are none. */
+    /** What [DictionarySettings.order] calls it. */
+    val orderKey: String
+        get() = when (this) {
+            is Downloaded -> downloadedOrderKey(info.id)
+            is Online -> dictionary.orderKey
+        }
+}
+
+/** The entries one dictionary has for a looked up text. */
+data class DictionaryResult(val source: DictionarySource, val entries: List<DictionaryEntry>)
+
+/** A word as one part of speech, with its meanings, for a brief translation. */
+data class BriefEntry(val word: String, val pos: String, val meanings: List<String>)
+
+/**
+ * The meanings of each entry, as a brief translation; a meaning that's already given by an entry before isn't
+ * repeated, and the entries left without any are dropped. The explanations of the online Wiktionary are left out
+ * when there's anything else: they're long, and they don't translate.
+ */
+fun List<DictionaryResult>.brief(): List<BriefEntry> {
+    val seen = HashSet<String>()
+    return filter { (it.source as? DictionarySource.Online)?.dictionary?.explains != true }
+        .ifEmpty { this }
+        .flatMap { it.entries }
+        .mapNotNull { entry ->
+            val meanings = entry.senses.map { it.gloss }.filter { seen.add(it) }
+            if (meanings.isEmpty()) null else BriefEntry(entry.word, entry.pos, meanings)
+        }
+}
+
+/** All the meanings of the [brief] in one line; null if there are none. */
 fun List<DictionaryResult>.meaningsLine(): String? =
-    flatMap { result -> result.entries.flatMap { entry -> entry.senses.map { it.gloss } } }
-        .distinct()
-        .joinToString("; ")
-        .ifEmpty { null }
+    brief().flatMap { it.meanings }.joinToString("; ").ifEmpty { null }
 
 sealed interface DownloadState {
     /**
@@ -153,21 +185,44 @@ class DictionaryRepository(context: Context) {
         }
     }
 
-    /** What the installed dictionaries have for [text], a word or a phrase; empty if it's too long to be either. */
-    suspend fun lookup(text: String): List<DictionaryResult> {
+    /**
+     * What the installed dictionaries, except the ones with the IDs in [skip], have for [text], a word or a phrase;
+     * empty if it's too long to be either. In the order they were installed.
+     */
+    suspend fun lookup(text: String, skip: Set<String> = emptySet()): List<DictionaryResult> {
         val trimmed = text.trim()
         if (trimmed.isEmpty() || trimmed.length > MAX_LOOKUP_LENGTH) return emptyList()
         return withContext(Dispatchers.IO) {
             mutex.withLock {
                 val start = SystemClock.elapsedRealtime()
                 val results = _installed.value.mapNotNull { info ->
+                    if (info.id in skip) return@mapNotNull null
                     val reader = readers[info.id] ?: return@mapNotNull null
                     lookupKeys(trimmed, info.languageCode)
                         .firstNotNullOfOrNull { keys -> reader.lookup(keys).ifEmpty { null } }
-                        ?.let { DictionaryResult(info, it) }
+                        ?.let { DictionaryResult(DictionarySource.Downloaded(info), it) }
                 }
                 Log.d(TAG, "Looked up \"$trimmed\" in ${SystemClock.elapsedRealtime() - start} ms")
                 results
+            }
+        }
+    }
+
+    /**
+     * Words of the downloaded dictionaries, except the ones with the IDs in [skip], that start with [prefix], for
+     * completing what's being typed.
+     */
+    suspend fun wordsStartingWith(prefix: String, limit: Int, skip: Set<String> = emptySet()): List<String> {
+        val key = dictionaryKey(prefix)
+        if (key.isEmpty()) return emptyList()
+        return withContext(Dispatchers.IO) {
+            mutex.withLock {
+                _installed.value
+                    .filter { it.id !in skip }
+                    .flatMap { readers[it.id]?.wordsStartingWith(key, limit).orEmpty() }
+                    .distinctBy { dictionaryKey(it) }
+                    .sortedBy { dictionaryKey(it) }
+                    .take(limit)
             }
         }
     }
@@ -314,10 +369,11 @@ class DictionaryRepository(context: Context) {
         /** The Russian edition is about 300 MB; the English one is 3 GB, too much for a phone. */
         const val MAX_WHOLE_EDITION_BYTES = 600L * 1024 * 1024
 
-        /** Longer texts are sentences, not words or phrases that dictionaries have. */
-        const val MAX_LOOKUP_LENGTH = 60
     }
 }
+
+/** Longer texts are sentences, not words or phrases that dictionaries have. */
+internal const val MAX_LOOKUP_LENGTH = 60
 
 private class DownloadException(val error: DownloadError) : Exception(error.name)
 

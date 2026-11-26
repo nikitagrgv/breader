@@ -1,12 +1,10 @@
 package ru.nikitagrgv.breader.ui.translation
 
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
@@ -18,18 +16,19 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
+import org.json.JSONException
 import ru.nikitagrgv.breader.BreaderApplication
 import ru.nikitagrgv.breader.data.TranslationSettings
-import ru.nikitagrgv.breader.dictionary.DictionaryRepository
+import ru.nikitagrgv.breader.dictionary.Dictionaries
 import ru.nikitagrgv.breader.dictionary.DictionaryResult
-import ru.nikitagrgv.breader.dictionary.meaningsLine
+import ru.nikitagrgv.breader.dictionary.BriefEntry
+import ru.nikitagrgv.breader.dictionary.brief
 import ru.nikitagrgv.breader.translation.Excerpt
-import ru.nikitagrgv.breader.translation.OpenRouter
 import ru.nikitagrgv.breader.translation.OpenRouterException
 import ru.nikitagrgv.breader.translation.Translation
 import ru.nikitagrgv.breader.translation.TranslationCache
 import ru.nikitagrgv.breader.translation.TranslationKey
-import ru.nikitagrgv.breader.translation.TranslationPrompt
+import ru.nikitagrgv.breader.web.WebServiceException
 import java.io.IOException
 import java.net.SocketTimeoutException
 
@@ -51,7 +50,7 @@ data class TranslationState(
     val models: List<String>,
     /** Results by model, in the order they came; the models that have none yet are waited for. */
     val results: Map<String, ModelResult>,
-    /** What the downloaded dictionaries have for the fragment. */
+    /** What the dictionaries have for the fragment; the online ones add theirs as they come. */
     val dictionary: List<DictionaryResult> = emptyList(),
     /** False when only the cache is looked in: without auto-translation, a selection costs no requests. */
     val modelsAsked: Boolean = true,
@@ -59,9 +58,9 @@ data class TranslationState(
     val pending: List<String>
         get() = models.filter { it !in results }
 
-    /** All the meanings from the dictionaries in one line; null if they have nothing. */
-    val dictionaryLine: String?
-        get() = dictionary.meaningsLine()
+    /** The meanings from the dictionaries by part of speech; empty if they have nothing. */
+    val dictionaryBrief: List<BriefEntry>
+        get() = dictionary.brief()
 }
 
 /**
@@ -71,9 +70,9 @@ data class TranslationState(
  * ones are cached.
  */
 class TranslationViewModel(
-    private val openRouter: OpenRouter,
+    private val translator: ModelTranslator,
     private val cache: TranslationCache,
-    private val dictionaries: DictionaryRepository,
+    private val dictionaries: Dictionaries,
 ) : ViewModel() {
     private val state = MutableStateFlow<TranslationState?>(null)
 
@@ -188,8 +187,7 @@ class TranslationViewModel(
             modelsAsked = askModels,
         )
         viewModelScope.launch(requests) {
-            val found = dictionaries.lookup(excerpt.fragment)
-            if (found.isNotEmpty()) state.update { it?.copy(dictionary = found) }
+            dictionaries.lookup(excerpt.fragment).collect { progress -> state.update { it?.copy(dictionary = progress.results) } }
         }
         if (models.isEmpty()) return
         // The cache is ready long before anything is selected, so the cached results show at once.
@@ -213,46 +211,26 @@ class TranslationViewModel(
     }
 
     private fun request(model: String) {
-        val excerpt = state.value?.excerpt ?: return
+        if (state.value == null) return
         val key = key ?: return
         val settings = settings
         // Waited for again.
         state.update { state -> state?.copy(results = state.results - model) }
         viewModelScope.launch(requests) {
-            val language = settings.effectiveTargetLanguage
-            val result = try {
-                val reply = openRouter.chat(
-                    apiKey = settings.apiKey,
-                    model = model,
-                    system = TranslationPrompt.system(language),
-                    user = TranslationPrompt.user(excerpt, settings.sourceLanguage, language),
-                )
-                TranslationPrompt.parse(reply)?.let { ModelResult.Done(it) }
-                    ?: ModelResult.Failed(TranslationError(TranslationError.Kind.BAD_REPLY)).also {
-                        Log.w(TAG, "No translation in the reply of $model: $reply")
-                    }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.w(TAG, "Translation by $model failed", e)
-                ModelResult.Failed(e.toTranslationError())
-            }
-            if (result is ModelResult.Done) cache.put(key, model, result.translation)
+            val result = translator.translate(key, model, settings)
             // Added to the end: the results stay in the order they came.
             state.update { state -> state?.copy(results = state.results - model + (model to result)) }
         }
     }
 
     companion object {
-        private const val TAG = "TranslationViewModel"
-
         /** How long the selection has to stay the same before the models are asked. */
         private const val SELECTION_DELAY_MS = 500L
 
         val Factory = viewModelFactory {
             initializer {
                 val app = this[APPLICATION_KEY] as BreaderApplication
-                TranslationViewModel(app.openRouter, app.translationCache, app.dictionaryRepository)
+                TranslationViewModel(app.modelTranslator, app.translationCache, app.dictionaries)
             }
         }
     }
@@ -267,6 +245,13 @@ internal fun Exception.toTranslationError(): TranslationError {
             429 -> TranslationError.Kind.RATE_LIMITED
             else -> return TranslationError(TranslationError.Kind.OTHER, message)
         }
+        // The free services, which have no keys of their own, report 401 only for a key given to them.
+        is WebServiceException -> when (code) {
+            401 -> TranslationError.Kind.INVALID_KEY
+            429 -> TranslationError.Kind.RATE_LIMITED
+            else -> return TranslationError(TranslationError.Kind.OTHER, message)
+        }
+        is JSONException -> TranslationError.Kind.BAD_REPLY
         is SocketTimeoutException -> TranslationError.Kind.TIMEOUT
         is IOException -> TranslationError.Kind.NETWORK
         else -> return TranslationError(TranslationError.Kind.OTHER, message ?: javaClass.simpleName)

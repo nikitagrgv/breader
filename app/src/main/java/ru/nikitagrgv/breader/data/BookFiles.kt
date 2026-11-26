@@ -3,12 +3,15 @@ package ru.nikitagrgv.breader.data
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.ParcelFileDescriptor
 import android.provider.OpenableColumns
 import ru.nikitagrgv.breader.format.BookContent
 import ru.nikitagrgv.breader.format.BookParser
+import ru.nikitagrgv.breader.format.BookSource
 import java.io.FileNotFoundException
 import java.io.IOException
 import java.io.InputStream
+import java.security.MessageDigest
 import java.util.UUID
 
 /** Access to book files picked by the user. All methods block, call them off the main thread. */
@@ -20,7 +23,7 @@ class BookFiles(context: Context) {
         val fileName = displayName(uri) ?: uri.lastPathSegment.orEmpty()
         val format = BookParser.detectFormat(fileName, resolver.getType(uri))
             ?: throw IOException("Unsupported file: $fileName")
-        val metadata = open(uri).use { BookParser.readMetadata(format, it) }
+        val metadata = BookParser.readMetadata(format, source(uri))
         try {
             resolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
         } catch (_: SecurityException) {
@@ -37,7 +40,25 @@ class BookFiles(context: Context) {
         )
     }
 
-    fun readContent(book: Book): BookContent = open(book.uri).use { BookParser.parse(book.format, it) }
+    /** A [java.io.Closeable] content is open until it's closed. */
+    fun readContent(book: Book): BookContent = BookParser.parse(book.format, source(book.uri))
+
+    /**
+     * A hash of the file's bytes, which tells it apart whatever it's named and wherever it's picked from. Unlike one of
+     * its text, it doesn't change when the app reads the text another way, and a PDF needn't be opened for it.
+     */
+    fun fingerprint(uri: Uri): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        source(uri).openStream().use { input ->
+            val buffer = ByteArray(BUFFER_SIZE)
+            while (true) {
+                val read = input.read(buffer)
+                if (read < 0) break
+                digest.update(buffer, 0, read)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
 
     fun displayName(uri: Uri): String? = runCatching {
         resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
@@ -45,6 +66,15 @@ class BookFiles(context: Context) {
         }
     }.getOrNull()
 
-    private fun open(uri: Uri): InputStream =
-        resolver.openInputStream(uri) ?: throw FileNotFoundException("Can't open $uri")
+    private fun source(uri: Uri) = object : BookSource {
+        override fun openStream(): InputStream =
+            resolver.openInputStream(uri) ?: throw FileNotFoundException("Can't open $uri")
+
+        override fun openDescriptor(): ParcelFileDescriptor =
+            resolver.openFileDescriptor(uri, "r") ?: throw FileNotFoundException("Can't open $uri")
+    }
+
+    private companion object {
+        const val BUFFER_SIZE = 1 shl 16
+    }
 }
